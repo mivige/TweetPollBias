@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "bias_analysis"
+version = "0.0.1"
+description = "Twitter social-poll analysis (2020 cycle): extract candidate-order, appellatives, sentiment, emoji and political-leaning markers and study their relationship with poll biases."
+authors = [
+  { name = "Michele Vincenzo Gentile" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = "~=3.12.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["bias_analysis"]
+include = ["pyproject.toml", "bias_analysis/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["bias_analysis"]
+force-sort-within-sections = true
+
