@@ -1,0 +1,20 @@
+=== Candidate Order Analysis - Summary Statistics ===
+
+Trump:
+  Total polls: 12600
+  Non-zero polls: 5845
+  Position 1.0: 3643 polls, Mean: 56.7%, Median: 56.6%
+  Position 2.0: 2071 polls, Mean: 51.4%, Median: 48.1%
+  Position 3.0: 94 polls, Mean: 48.1%, Median: 50.0%
+  Position 4.0: 37 polls, Mean: 52.8%, Median: 58.9%
+  Overall: Mean: 54.7%, Median: 53.3%
+
+Biden:
+  Total polls: 12600
+  Non-zero polls: 5838
+  Position 1.0: 2112 polls, Mean: 45.5%, Median: 45.5%
+  Position 2.0: 3597 polls, Mean: 40.5%, Median: 38.9%
+  Position 3.0: 106 polls, Mean: 24.3%, Median: 19.0%
+  Position 4.0: 23 polls, Mean: 18.7%, Median: 15.4%
+  Overall: Mean: 41.9%, Median: 40.0%
+
