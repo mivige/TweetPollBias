@@ -59,6 +59,96 @@ def candidate_order():
         for variation in variations:
             candidate_mapping[variation.strip()] = main_name
     
+    def smart_candidate_match(candidate_text):
+        """
+        Enhanced candidate matching that handles variations with emojis, prefixes, etc.
+        
+        This function attempts to match candidate names even when they include:
+        - Emojis (🇺🇸, 💙, 🤮, etc.)
+        - Common prefixes ("vote for", "voting for", "elect", etc.)
+        - Common suffixes ("2020", "for president", etc.)
+        - Case variations and extra whitespace
+        
+        Args:
+            candidate_text (str): Raw candidate text from poll option
+            
+        Returns:
+            str: Normalized candidate name ('Trump', 'Biden', or 'Other')
+        """
+        if not candidate_text or not isinstance(candidate_text, str):
+            return 'Other'
+        
+        # First try exact match (fastest path)
+        normalized_text = candidate_text.strip()
+        if normalized_text in candidate_mapping:
+            return candidate_mapping[normalized_text]
+        
+        # Clean the text for fuzzy matching
+        import re
+        
+        # Remove emojis and special characters but keep letters, numbers, and basic punctuation
+        cleaned_text = re.sub(r'[^\w\s\-\.\(\)\/]', ' ', normalized_text)
+        
+        # Remove common prefixes that don't affect candidate identity
+        prefixes_to_remove = [
+            r'\b(?:vote|voting|elect|choose|pick|select|support|go|team|go with|pick)\s+(?:for\s+)?',
+            r'\b(?:president|pres\.?|mr\.?|senator|sen\.?|vice president|vp)\s+',
+            r'\b(?:democratic|democrat|republican|gop|dem)\s+',
+            r'\b(?:candidate|nominee)\s+',
+            r'\b(?:i choose|i pick|i vote|i support|i want|i prefer)\s+',
+            r'\b(?:definitely|probably|maybe|likely)\s+',
+            r'\b(?:gonna vote|will vote|voting)\s+(?:for\s+)?'
+        ]
+        
+        for prefix_pattern in prefixes_to_remove:
+            cleaned_text = re.sub(prefix_pattern, '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Remove common suffixes
+        suffixes_to_remove = [
+            r'\s+(?:2020|2024|for president|for pres|presidency|administration|admin)$',
+            r'\s+(?:ticket|campaign|rally|supporters?)$',
+            r'\s+(?:wins?|victory|loses?|defeat)$',
+            r'\s+(?:\(democrat\)|\(republican\)|\(gop\)|\(dem\)|\(r\)|\(d\))$',
+            r'\s+(?:again|still|now|then|too|also)$'
+        ]
+        
+        for suffix_pattern in suffixes_to_remove:
+            cleaned_text = re.sub(suffix_pattern, '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace
+        cleaned_text = ' '.join(cleaned_text.split())
+        
+        # Try exact match after cleaning
+        if cleaned_text in candidate_mapping:
+            return candidate_mapping[cleaned_text]
+        
+        # Try case-insensitive partial matching for core candidate names
+        cleaned_lower = cleaned_text.lower()
+        
+        # Define core name patterns for fuzzy matching
+        trump_patterns = [
+            r'\btrump\b', r'\bdonald\b.*\btrump\b', r'\btrump\b.*\bdonald\b',
+            r'\bpresident\s+trump\b', r'\bdonald\s+j\.?\s+trump\b'
+        ]
+        
+        biden_patterns = [
+            r'\bbiden\b', r'\bjoe\b.*\bbiden\b', r'\bbiden\b.*\bjoe\b',
+            r'\bpresident\s+biden\b', r'\bjoseph\s+biden\b'
+        ]
+        
+        # Check Trump patterns
+        for pattern in trump_patterns:
+            if re.search(pattern, cleaned_lower):
+                return 'Trump'
+        
+        # Check Biden patterns  
+        for pattern in biden_patterns:
+            if re.search(pattern, cleaned_lower):
+                return 'Biden'
+        
+        # If no match found, return 'Other'
+        return 'Other'
+    
     # Load raw poll data from three Twitter data sources
     decahose_df, vote_df, voting_df = load_for_candidate_order()
     
@@ -119,8 +209,8 @@ def candidate_order():
                 votes = option.get('votes', 0)
                 vote_percentage = (votes / total_votes) * 100 if total_votes > 0 else 0
                 
-                # Map to normalized candidate name
-                normalized_name = candidate_mapping.get(candidate_name, 'Other')
+                # Use smart matching to handle variations with emojis, prefixes, etc.
+                normalized_name = smart_candidate_match(candidate_name)
                 
                 # Store data for first occurrence of candidate (handles duplicates)
                 if poll_record[f'{normalized_name}_position'] is None:
