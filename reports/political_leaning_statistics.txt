@@ -1,0 +1,23 @@
+=== Political Leaning Analysis - Summary Statistics ===
+
+Political Leaning Distribution:
+  neutral: 6518 polls (89.0%)
+  pro-biden: 410 polls (5.6%)
+  pro-trump: 399 polls (5.4%)
+
+Trump:
+  Total polls: 7327
+  Non-zero polls: 6929
+  Pro Trump: 389 polls, Mean: 77.0%, Median: 90.3%
+  Neutral: 6162 polls, Mean: 52.5%, Median: 50.0%
+  Pro Biden: 378 polls, Mean: 57.5%, Median: 56.0%
+  Overall: Mean: 54.1%, Median: 52.4%
+
+Biden:
+  Total polls: 7327
+  Non-zero polls: 6921
+  Pro Trump: 365 polls, Mean: 22.5%, Median: 11.0%
+  Neutral: 6167 polls, Mean: 43.8%, Median: 42.3%
+  Pro Biden: 389 polls, Mean: 41.2%, Median: 39.8%
+  Overall: Mean: 42.5%, Median: 40.7%
+
