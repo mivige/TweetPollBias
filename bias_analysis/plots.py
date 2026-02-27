@@ -735,6 +735,107 @@ def leaning():
     return plot_data
 
 @app.command()
+def bias_relationship_scatter():
+    """
+    Generate scatter plots analyzing the relationship between audience bias (x-axis),
+    poll outcome (y-axis), and dichotomized bias markers (hue).
+    """
+    logger.info("Starting bias relationship scatter plots...")
+    
+    try:
+        from bias_analysis.dataset import create_unified_poll_dataset
+        unified_df = create_unified_poll_dataset()
+    except Exception as e:
+        logger.error(f"Failed to load unified dataset: {e}")
+        return
+        
+    if unified_df.empty:
+        logger.error("Unified dataset is empty!")
+        return
+
+    # Create audience_bias and poll_outcome measures
+    def normalize_audience_bias(partisanship_score):
+        if pd.notna(partisanship_score):
+            return np.tanh(partisanship_score)
+        return np.nan
+        
+    unified_df['audience_bias'] = unified_df['audience_mean_partisanship'].apply(normalize_audience_bias)
+    
+    def compute_poll_outcome_bias(row):
+        trump_share = row.get('trump_share')
+        biden_share = row.get('biden_share')
+        if pd.notna(trump_share) and pd.notna(biden_share):
+            return np.clip(trump_share - biden_share, -1.0, 1.0)
+        return np.nan
+        
+    unified_df['poll_outcome'] = unified_df.apply(compute_poll_outcome_bias, axis=1)
+
+    # Formality bias 
+    def compute_formality_bias(row):
+        trump_f = row.get('trump_formal_appellative', 0)
+        biden_f = row.get('biden_formal_appellative', 0)
+        if pd.isna(trump_f): trump_f = 0
+        if pd.isna(biden_f): biden_f = 0
+        trump_f, biden_f = int(trump_f), int(biden_f)
+        if trump_f == 1 and biden_f == 0: return 1.0
+        elif trump_f == 0 and biden_f == 1: return -1.0
+        return 0.0
+
+    unified_df['formality_bias'] = unified_df.apply(compute_formality_bias, axis=1)
+
+    markers = {
+        'candidate_order': 'Candidate Order Bias',
+        'formality_bias': 'Formality Bias',
+        'text_partisan_score': 'Political Leaning (Text)'
+    }
+    
+    sns.set_style("whitegrid")
+    
+    for marker_col, marker_name in markers.items():
+        if marker_col not in unified_df.columns:
+            logger.warning(f"Marker {marker_col} missing, skipping...")
+            continue
+            
+        plot_df = unified_df[['audience_bias', 'poll_outcome', marker_col]].dropna().copy()
+        
+        if len(plot_df) < 10:
+            logger.warning(f"Not enough data for {marker_col}")
+            continue
+            
+        median_val = plot_df[marker_col].median()
+        
+        # Dichotomize 
+        plot_df['marker_dichotomized'] = np.where(plot_df[marker_col] >= median_val, 'High', 'Low')
+        
+        plt.figure(figsize=(10, 8))
+        sns.scatterplot(
+            data=plot_df, 
+            x='audience_bias', 
+            y='poll_outcome', 
+            hue='marker_dichotomized',
+            palette={'High': 'tab:red', 'Low': 'tab:blue'},
+            alpha=0.6,
+            s=50,
+            edgecolor='white'
+        )
+        
+        # Add zero lines
+        plt.axhline(0, color='gray', linestyle='--', alpha=0.5)
+        plt.axvline(0, color='gray', linestyle='--', alpha=0.5)
+        
+        plt.title(f'Relationship Between Audience Bias and Poll Outcome\nHue: {marker_name} (Dichotomized at Median:{median_val:.3f})')
+        plt.xlabel('Audience Bias (-1=Left/Pro-Biden, +1=Right/Pro-Trump)')
+        plt.ylabel('Poll Outcome Bias (-1=Biden win, +1=Trump win)')
+        plt.legend(title=f'{marker_name}\n(High = Right/Trump-leaning)')
+        
+        output_path = FIGURES_DIR / f"scatter_{marker_col}_bias.png"
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        logger.success(f"Saved scatter plot to {output_path}")
+
+@app.command()
 def run_all():
     """
     Run all plotting functions to generate complete set of visualizations.
@@ -742,6 +843,7 @@ def run_all():
     candidate_order()
     appellatives()
     leaning() 
+    bias_relationship_scatter()
 
 if __name__ == "__main__":
     app()
