@@ -219,7 +219,7 @@ def candidate_order():
     return result_df
 
 @app.command()
-def political_leaning(max_samples: int = typer.Option(10, help="Maximum number of samples to process from each dataset")):
+def political_leaning(max_samples: int = typer.Option(None, help="Maximum number of samples to process from each dataset")):
     """
     Analyzes political leaning indicators in poll text using facebook/bart-large-mnli.
     
@@ -330,8 +330,11 @@ def political_leaning(max_samples: int = typer.Option(10, help="Maximum number o
         logger.warning("Base dataset is empty. Cannot extract political leaning.")
         return
         
-    sample_df = base_df.head(max_samples) if len(base_df) > max_samples else base_df
-    logger.info(f"Processing political leaning for {len(sample_df)} polls (limited to {max_samples} samples)...")
+    sample_df = base_df.head(max_samples) if max_samples is not None and len(base_df) > max_samples else base_df
+    if max_samples is not None:
+        logger.info(f"Processing political leaning for {len(sample_df)} polls (limited to {max_samples} samples)...")
+    else:
+        logger.info(f"Processing political leaning for all {len(sample_df)} polls...")
     
     political_leaning_data = []
     
