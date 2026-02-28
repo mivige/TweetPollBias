@@ -11,6 +11,12 @@ pytest
 python-dotenv
 ruff
 scikit-learn
+scipy
+seaborn
+spacy
+statsmodels
+torch
 tqdm
+transformers
 typer
 -e .
