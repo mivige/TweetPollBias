@@ -1,4 +1,9 @@
 site_name: TweetPollBias
-# 
 site_author: Michele Vincenzo Gentile
-# 
+site_description: "Twitter social-poll analysis (2020 cycle): extract candidate-order, appellatives, and political-leaning markers."
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Feature Extraction: features.md
+  - Visualizations & Plots: plots.md
