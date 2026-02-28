@@ -25,14 +25,8 @@ def candidate_order():
     """
     Generate advanced scatter plots analyzing candidate position bias in Twitter polls.
     
-    Creates dual-panel visualization showing how poll position (1st, 2nd, 3rd, 4th)
-    correlates with vote percentage for Trump and Biden. Uses multiple visual layers:
-    - Violin plots: Show distribution density at each position
-    - Scatter points: Individual poll results with jitter for clarity
-    - Statistical markers: Mean with error bars, median markers
-    - Overall median line: Reference line for comparison
-    
-    Saves both the plot and detailed statistics to files for analysis.
+    Creates dual-panel visualization showing how poll position correlates with vote percentage.
+    Saves both the plot and detailed statistics to files.
     """
     input_path = PROCESSED_DATA_DIR / "candidate_order_features.csv"
     output_path = FIGURES_DIR / "candidate_order_plot.png"
@@ -53,10 +47,6 @@ def candidate_order():
     def improved_scatter(df_candidate, title, ax):
         """
         Create sophisticated scatter plot with multiple statistical layers.
-        
-        Combines violin plots (distribution), jittered scatter points (individual polls),
-        statistical markers (means/medians), and reference lines for comprehensive
-        visualization of position bias effects.
         
         Args:
             df_candidate: DataFrame with candidate position and percentage data
@@ -81,12 +71,12 @@ def candidate_order():
             logger.warning(f"No non-zero data for {candidate_name}")
             return ax
             
-        # Add horizontal jitter to scatter points for better visibility
+        # Add horizontal jitter
         x_base = plot_df_nonzero['position'].values.astype(float)
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
         
-        # Background violin plots show distribution density at each position
+        # Background violin plots
         try:
             sns.violinplot(x='position', y='percentage', data=plot_df_nonzero,
                           inner=None, color='lightgray', cut=0, linewidth=0, 
@@ -102,48 +92,38 @@ def candidate_order():
             zorder=3
         )
         
-        # Calculate position-wise statistics for overlays
         grp = plot_df_nonzero.groupby('position')['percentage']
         medians = grp.median()
         means = grp.mean()
-        sems = grp.sem().fillna(0)  # Standard error of mean
+        sems = grp.sem().fillna(0)
         
         x_positions = sorted(plot_df_nonzero['position'].unique())
         
-        # Overlay mean values with error bars showing uncertainty
         if len(x_positions) > 0:
             ax.errorbar(x_positions, means.loc[x_positions], yerr=sems.loc[x_positions],
                        fmt='D', color='black', markersize=7, capsize=5, 
                        label='Mean ± SEM', zorder=4)
-            
-            # Overlay median markers (robust central tendency)
             for pos in x_positions:
                 if pos in medians.index:
                     ax.plot(pos, medians.loc[pos], marker='s', color='darkgreen', 
                            markersize=8, zorder=4)
         
-        # Reference line: overall median performance for context
         overall_median = plot_df_nonzero['percentage'].median()
         ax.axhline(overall_median, color='gray', linestyle='--', linewidth=1, alpha=0.7)
-        # ax.text(0.1, overall_median + 2, f'Overall Median ({overall_median:.1f}%)', color='gray', fontsize=9)
         
-        # Axis labels and styling
         ax.set_xlabel('Poll Position')
         ax.set_ylabel('Vote Percentage (%)')
         ax.set_title(title)
         ax.grid(True, alpha=0.3)
         
-        # Configure x-axis to show all positions clearly
         max_position = plot_df_nonzero['position'].max()
         min_position = plot_df_nonzero['position'].min()
         ax.set_xlim(min_position - 0.5, max_position + 0.5)
         
-        # Explicitly set tick positions and labels
         all_positions = sorted(plot_df_nonzero['position'].unique())
         ax.set_xticks(all_positions)
         ax.set_xticklabels([str(int(pos)) for pos in all_positions])
         
-        # Y-axis covers full percentage range with padding
         ax.set_ylim(-2, 102)
         
         return ax
@@ -233,16 +213,7 @@ def appellatives():
     """
     Generate advanced scatter plots analyzing formality bias in Twitter poll appellatives.
     
-    Creates dual-panel visualization showing how appellative formality (formal, neutral, informal)
-    correlates with vote percentage for Trump and Biden. Uses the same visual design as 
-    candidate_order plots:
-    - Violin plots: Show distribution density for each formality level
-    - Scatter points: Individual poll results with jitter for clarity
-    - Statistical markers: Mean with error bars, median markers
-    - Overall median line: Reference line for comparison
-    
-    Analyzes whether formal appellatives (e.g., "President Trump") vs informal ones
-    (e.g., "Sleepy Joe") correlate with different voting patterns.
+    Creates dual-panel visualization showing how appellative formality correlates with vote percentage.
     """
     input_path = PROCESSED_DATA_DIR / "formal_informal_appellatives.csv"
     output_path = FIGURES_DIR / "formal_informal_appellatives_plot.png"
@@ -266,11 +237,6 @@ def appellatives():
     def improved_formality_scatter(df_candidate, title, ax):
         """
         Create sophisticated scatter plot showing formality vs vote percentage.
-        
-        Similar to position bias plots but with formality categories on x-axis.
-        Combines violin plots (distribution), jittered scatter points (individual polls),
-        statistical markers (means/medians), and reference lines for comprehensive
-        visualization of appellative formality effects.
         
         Args:
             df_candidate: DataFrame with candidate formality and percentage data
@@ -315,7 +281,7 @@ def appellatives():
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
         
-        # Background violin plots show distribution density at each formality level
+        # Background violin plots
         try:
             # Prepare data for violin plot with proper formality labels
             violin_data = plot_df_nonzero.copy()
@@ -353,11 +319,11 @@ def appellatives():
                     ax.plot(pos, medians.loc[pos], marker='s', color='darkgreen', 
                            markersize=8, zorder=4)
         
-        # Reference line: overall median performance for context
+        # Reference line: overall median
         overall_median = plot_df_nonzero['percentage'].median()
         ax.axhline(overall_median, color='gray', linestyle='--', linewidth=1, alpha=0.7)
         
-        # Axis labels and styling
+        # Axis labels
         ax.set_xlabel('Appellative Formality')
         ax.set_ylabel('Vote Percentage (%)')
         ax.set_title(title)
@@ -459,17 +425,7 @@ def leaning():
     """
     Generate advanced scatter plots analyzing political leaning bias in Twitter polls.
     
-    Creates dual-panel visualization showing how political leaning (pro-Trump, neutral, pro-Biden)
-    correlates with vote percentage for Trump and Biden. Uses the same visual design as other plots:
-    - Violin plots: Show distribution density for each leaning category
-    - Scatter points: Individual poll results with jitter for clarity
-    - Statistical markers: Mean with error bars, median markers
-    - Overall median line: Reference line for comparison
-    
-    Categorizes polls based on political sentiment scores:
-    - Pro-Trump: High Trump support OR high anti-Biden scores (>0.5)
-    - Pro-Biden: High Biden support OR high anti-Trump scores (>0.5)  
-    - Neutral: All other cases (no clear political leaning detected)
+    Creates dual-panel visualization showing how political leaning correlates with vote percentage.
     """
     input_path = PROCESSED_DATA_DIR / "political_leaning_features.csv"
     output_path = FIGURES_DIR / "political_leaning_plot.png"
@@ -495,11 +451,6 @@ def leaning():
         """
         Categorize poll political leaning based on sentiment scores.
         
-        Logic:
-        - Pro-Trump: Trump support >0.5 OR anti-Biden >0.5 OR (conservative >0.5 AND liberal <0.5)
-        - Pro-Biden: Biden support >0.5 OR anti-Trump >0.5 OR (liberal >0.5 AND conservative <0.5)
-        - Neutral: All other cases (no clear leaning detected)
-        
         Args:
             row: DataFrame row with political scores
             
@@ -517,16 +468,10 @@ def leaning():
             row['anti_trump_score'] > 0.5,
             (row['liberal_score'] > 0.5 and row['conservative_score'] < 0.5)
         ]
-        
-        # Check for clear pro-Trump leaning
         if any(trump_indicators) and not any(biden_indicators):
             return 'pro-trump'
-        
-        # Check for clear pro-Biden leaning
         elif any(biden_indicators) and not any(trump_indicators):
             return 'pro-biden'
-        
-        # Default to neutral if no clear leaning
         else:
             return 'neutral'
 
@@ -540,11 +485,6 @@ def leaning():
     def improved_leaning_scatter(df_candidate, title, ax):
         """
         Create sophisticated scatter plot showing political leaning vs vote percentage.
-        
-        Similar to formality plots but with political leaning categories on x-axis.
-        Combines violin plots (distribution), jittered scatter points (individual polls),
-        statistical markers (means/medians), and reference lines for comprehensive
-        visualization of political leaning effects.
         
         Args:
             df_candidate: DataFrame with candidate leaning and percentage data
@@ -588,7 +528,7 @@ def leaning():
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
         
-        # Background violin plots show distribution density at each leaning level
+        # Background violin plots
         try:
             # Prepare data for violin plot with proper leaning labels
             violin_data = plot_df_nonzero.copy()
@@ -605,32 +545,26 @@ def leaning():
             c='tab:red' if candidate_name == 'Trump' else 'tab:blue',
             zorder=3
         )
-        
-        # Calculate leaning-wise statistics for overlays
         grp = plot_df_nonzero.groupby('leaning_numeric')['percentage']
         medians = grp.median()
         means = grp.mean()
-        sems = grp.sem().fillna(0)  # Standard error of mean
+        sems = grp.sem().fillna(0)
         
         x_positions = sorted(plot_df_nonzero['leaning_numeric'].unique())
         
-        # Overlay mean values with error bars showing uncertainty
         if len(x_positions) > 0:
             ax.errorbar(x_positions, means.loc[x_positions], yerr=sems.loc[x_positions],
                        fmt='D', color='black', markersize=7, capsize=5, 
                        label='Mean ± SEM', zorder=4)
-            
-            # Overlay median markers (robust central tendency)
             for pos in x_positions:
                 if pos in medians.index:
                     ax.plot(pos, medians.loc[pos], marker='s', color='darkgreen', 
                            markersize=8, zorder=4)
         
-        # Reference line: overall median performance for context
         overall_median = plot_df_nonzero['percentage'].median()
         ax.axhline(overall_median, color='gray', linestyle='--', linewidth=1, alpha=0.7)
         
-        # Axis labels and styling
+        # Axis labels
         ax.set_xlabel('Political Leaning')
         ax.set_ylabel('Vote Percentage (%)')
         ax.set_title(title)
@@ -735,6 +669,137 @@ def leaning():
     return plot_data
 
 @app.command()
+def bias_relationship_scatter():
+    """
+    Generate scatter plots analyzing the relationship between audience bias (x-axis),
+    poll outcome (y-axis), and dichotomized bias markers (hue).
+    """
+    logger.info("Starting bias relationship scatter plots...")
+    
+    try:
+        from bias_analysis.dataset import get_base_dataset
+        
+        base_df = get_base_dataset()
+        
+        markers_dir = PROCESSED_DATA_DIR
+        candidate_order_df = pd.read_csv(markers_dir / "candidate_order_features.csv") if (markers_dir / "candidate_order_features.csv").exists() else pd.DataFrame()
+        appellatives_df = pd.read_csv(markers_dir / "formal_informal_appellatives.csv") if (markers_dir / "formal_informal_appellatives.csv").exists() else pd.DataFrame()
+        leaning_df = pd.read_csv(markers_dir / "political_leaning_features.csv") if (markers_dir / "political_leaning_features.csv").exists() else pd.DataFrame()
+        
+        unified_df = base_df.copy()
+        
+        if not candidate_order_df.empty:
+            candidate_order_df['poll_id'] = candidate_order_df['poll_id'].astype(str)
+            unified_df = unified_df.merge(candidate_order_df[['poll_id', 'Trump_position', 'Biden_position', 'Trump_percentage', 'Biden_percentage']], 
+                                          left_on='tweet_id', right_on='poll_id', how='left')
+            unified_df['candidate_order'] = (unified_df['Biden_position'] - unified_df['Trump_position']) * 0.25
+        
+        if not appellatives_df.empty:
+            appellatives_df['poll_id'] = appellatives_df['poll_id'].astype(str)
+            unified_df = unified_df.merge(appellatives_df[['poll_id', 'Trump_label', 'Biden_label']], 
+                                          left_on='tweet_id', right_on='poll_id', how='left')
+            label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
+            unified_df['trump_formal_appellative'] = unified_df['Trump_label'].map(label_map)
+            unified_df['biden_formal_appellative'] = unified_df['Biden_label'].map(label_map)
+            
+        if not leaning_df.empty:
+            leaning_df['poll_id'] = leaning_df['poll_id'].astype(str)
+            unified_df = unified_df.merge(leaning_df[['poll_id', 'conservative_score', 'liberal_score', 'trump_support_score', 'biden_support_score', 'anti_trump_score', 'anti_biden_score']], 
+                                          left_on='tweet_id', right_on='poll_id', how='left')
+            unified_df['text_partisan_score'] = unified_df['conservative_score']
+            
+        unified_df['trump_share'] = unified_df['Trump_percentage'] / 100.0 if 'Trump_percentage' in unified_df else np.nan
+        unified_df['biden_share'] = unified_df['Biden_percentage'] / 100.0 if 'Biden_percentage' in unified_df else np.nan
+
+    except Exception as e:
+        logger.error(f"Failed to load unified dataset: {e}")
+        return
+        
+    if unified_df.empty:
+        logger.error("Unified dataset is empty!")
+        return
+
+    # Create audience_bias and poll_outcome measures
+    def normalize_audience_bias(partisanship_score):
+        if pd.notna(partisanship_score):
+            return np.tanh(partisanship_score)
+        return np.nan
+        
+    unified_df['audience_bias'] = unified_df['audience_mean_partisanship'].apply(normalize_audience_bias)
+    
+    def compute_poll_outcome_bias(row):
+        trump_share = row.get('trump_share')
+        biden_share = row.get('biden_share')
+        if pd.notna(trump_share) and pd.notna(biden_share):
+            return np.clip(trump_share - biden_share, -1.0, 1.0)
+        return np.nan
+        
+    unified_df['poll_outcome'] = unified_df.apply(compute_poll_outcome_bias, axis=1)
+
+    # Formality bias 
+    def compute_formality_bias(row):
+        trump_f = row.get('trump_formal_appellative', 0)
+        biden_f = row.get('biden_formal_appellative', 0)
+        if pd.isna(trump_f): trump_f = 0
+        if pd.isna(biden_f): biden_f = 0
+        trump_f, biden_f = int(trump_f), int(biden_f)
+        return float(np.sign(trump_f - biden_f))
+
+    unified_df['formality_bias'] = unified_df.apply(compute_formality_bias, axis=1)
+
+    markers = {
+        'candidate_order': 'Candidate Order Bias',
+        'formality_bias': 'Formality Bias',
+        'text_partisan_score': 'Political Leaning (Text)'
+    }
+    
+    sns.set_style("whitegrid")
+    
+    for marker_col, marker_name in markers.items():
+        if marker_col not in unified_df.columns:
+            logger.warning(f"Marker {marker_col} missing, skipping...")
+            continue
+            
+        plot_df = unified_df[['audience_bias', 'poll_outcome', marker_col]].dropna().copy()
+        
+        if len(plot_df) < 10:
+            logger.warning(f"Not enough data for {marker_col}")
+            continue
+            
+        median_val = plot_df[marker_col].median()
+        
+        # Dichotomize 
+        plot_df['marker_dichotomized'] = np.where(plot_df[marker_col] >= median_val, 'High', 'Low')
+        
+        plt.figure(figsize=(10, 8))
+        sns.scatterplot(
+            data=plot_df, 
+            x='audience_bias', 
+            y='poll_outcome', 
+            hue='marker_dichotomized',
+            palette={'High': 'tab:red', 'Low': 'tab:blue'},
+            alpha=0.6,
+            s=50,
+            edgecolor='white'
+        )
+        
+        # Add zero lines
+        plt.axhline(0, color='gray', linestyle='--', alpha=0.5)
+        plt.axvline(0, color='gray', linestyle='--', alpha=0.5)
+        
+        plt.title(f'Relationship Between Audience Bias and Poll Outcome\nHue: {marker_name} (Dichotomized at Median:{median_val:.3f})')
+        plt.xlabel('Audience Bias (-1=Left/Pro-Biden, +1=Right/Pro-Trump)')
+        plt.ylabel('Poll Outcome Bias (-1=Biden win, +1=Trump win)')
+        plt.legend(title=f'{marker_name}\n(High = Right/Trump-leaning)')
+        
+        output_path = FIGURES_DIR / f"scatter_{marker_col}_bias.png"
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        logger.success(f"Saved scatter plot to {output_path}")
+
+@app.command()
 def run_all():
     """
     Run all plotting functions to generate complete set of visualizations.
@@ -742,6 +807,7 @@ def run_all():
     candidate_order()
     appellatives()
     leaning() 
+    bias_relationship_scatter()
 
 if __name__ == "__main__":
     app()
