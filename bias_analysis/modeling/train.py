@@ -35,6 +35,16 @@ ACTUAL_BIDEN_SHARE = 0.513  # 51.3%
 PARTISAN_STRATA = {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.26}
 IDEOLOGICAL_STRATA = {"Conservative": 0.38, "Moderate": 0.38, "Liberal": 0.24}
 
+# 2020 National Exit Poll gender split (48% male voters)
+GENDER_MALE_SHARE = 0.48
+
+# 2020 National Exit Poll age split (mapped to M3 brackets)
+# M3 brackets: <=18, 19-29, 30-39, >=40
+# Exit poll: 18-29 ~17%, 30-44 ~23%, 45-64 ~28%, 65+ ~32%
+AGE_19_29_SHARE = 0.17
+AGE_30_39_SHARE = 0.23
+AGE_40_OVER_SHARE = 0.60
+
 
 def load_and_merge_features(base_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -115,11 +125,20 @@ def load_and_merge_features(base_df: pd.DataFrame) -> pd.DataFrame:
     for col in ["candidate_order", "formality_bias", "conservative_score"]:
         df[col] = df[col].fillna(0.0)
 
+    # Fill demographic probabilities with column mean (or 0.5 neutral prior)
+    for col in ["author_gender_male", "author_age_19_29", "author_age_30_39", "author_age_40_over"]:
+        if col in df.columns:
+            col_mean = df[col].mean()
+            df[col] = df[col].fillna(col_mean if pd.notna(col_mean) else 0.5)
+        else:
+            df[col] = 0.5
+
     df["trump_share"] = df["trump_share"].fillna(df["trump_share"].median())
 
     model_cols = [
         "trump_share", "audience_mean_partisanship", "author_partisanship",
         "candidate_order", "formality_bias", "conservative_score", "total_votes",
+        "author_gender_male", "author_age_19_29", "author_age_30_39", "author_age_40_over",
     ]
     for col in model_cols:
         if col in df.columns:
@@ -146,7 +165,10 @@ def fit_glm(df: pd.DataFrame):
         statsmodels GLMResultsWrapper
     """
     formula = (
-        "trump_share ~ audience_mean_partisanship + author_partisanship + candidate_order + formality_bias + conservative_score"
+        "trump_share ~ audience_mean_partisanship + author_partisanship"
+        " + candidate_order + formality_bias + conservative_score"
+        " + author_gender_male"
+        " + author_age_19_29 + author_age_30_39 + author_age_40_over"
     )
 
     model = smf.glm(
@@ -200,10 +222,19 @@ def build_poststrat_frame(df: pd.DataFrame) -> pd.DataFrame:
         "Liberal":      {"cons_mult": 0.75},
     }
 
+    # Demographic profiles per partisan stratum (from exit polls)
+    # Republicans skew older and more male; Democrats skew younger and more female
+    demographic_profiles = {
+        "Republican":  {"gender_male": 0.52, "age_19_29": 0.11, "age_30_39": 0.19, "age_40_over": 0.70},
+        "Democrat":    {"gender_male": 0.43, "age_19_29": 0.24, "age_30_39": 0.27, "age_40_over": 0.49},
+        "Independent": {"gender_male": GENDER_MALE_SHARE, "age_19_29": AGE_19_29_SHARE, "age_30_39": AGE_30_39_SHARE, "age_40_over": AGE_40_OVER_SHARE},
+    }
+
     rows = []
     for p_name, p_weight in PARTISAN_STRATA.items():
         for i_name, i_weight in IDEOLOGICAL_STRATA.items():
             profile = partisan_profiles[p_name]
+            demo = demographic_profiles[p_name]
             mult = ideology_offsets[i_name]["cons_mult"]
             rows.append({
                 "partisan_stratum": p_name,
@@ -213,6 +244,10 @@ def build_poststrat_frame(df: pd.DataFrame) -> pd.DataFrame:
                 "candidate_order": median_order,
                 "formality_bias": median_formality,
                 "conservative_score": profile["cons"] * mult,
+                "author_gender_male": demo["gender_male"],
+                "author_age_19_29": demo["age_19_29"],
+                "author_age_30_39": demo["age_30_39"],
+                "author_age_40_over": demo["age_40_over"],
                 "weight": p_weight * i_weight,
             })
 

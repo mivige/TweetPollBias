@@ -408,7 +408,17 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
         unified_df['author_partisanship'] = partisanship_raw
     
     unified_df = unified_df.merge(
-        all_demographics_df[['user_id', 'org_is_org_prob']].rename(columns={'org_is_org_prob': 'author_org_prob'}),
+        all_demographics_df[[
+            'user_id', 'org_is_org_prob',
+            'gender_male_prob',
+            'age_19_29_prob', 'age_30_39_prob', 'age_40_over_prob',
+        ]].rename(columns={
+            'org_is_org_prob': 'author_org_prob',
+            'gender_male_prob': 'author_gender_male',
+            'age_19_29_prob': 'author_age_19_29',
+            'age_30_39_prob': 'author_age_30_39',
+            'age_40_over_prob': 'author_age_40_over',
+        }),
         left_on='author_id', right_on='user_id', how='left', suffixes=('', '_demo')
     )
     
