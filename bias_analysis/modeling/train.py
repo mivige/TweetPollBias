@@ -26,8 +26,13 @@ app = typer.Typer()
 # ---------------------------------------------------------------------------
 # Actual 2020 election results (% of popular vote)
 # ---------------------------------------------------------------------------
-ACTUAL_TRUMP_SHARE = 0.468  # 46.8%
-ACTUAL_BIDEN_SHARE = 0.513  # 51.3%
+# ACTUAL_TRUMP_SHARE = 0.468  # 46.8%
+# ACTUAL_BIDEN_SHARE = 0.513  # 51.3%
+# ---------------------------------------------------------------------------
+# ATTENTION: If we exclude third parties, the results (Trump vs Biden) were:
+ACTUAL_BIDEN_SHARE = 0.523  # 52.3%
+ACTUAL_TRUMP_SHARE = 0.477  # 47.7%
+
 
 # ---------------------------------------------------------------------------
 # 2020 National Exit Poll proportions
