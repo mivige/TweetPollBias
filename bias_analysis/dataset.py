@@ -116,8 +116,7 @@ def load_user_demographics_jsonl(file_path: Path, max_rows: Optional[int] = None
                     
                     # Extract age probabilities
                     if 'age' in demographics:
-                        demo_record['age_18_under_prob'] = demographics['age'].get('<=18', 0)
-                        demo_record['age_19_29_prob'] = demographics['age'].get('19-29', 0)
+                        demo_record['age_under_29_prob'] = demographics['age'].get('<=18', 0) + demographics['age'].get('19-29', 0)
                         demo_record['age_30_39_prob'] = demographics['age'].get('30-39', 0)
                         demo_record['age_40_over_prob'] = demographics['age'].get('>=40', 0)
                     
@@ -303,6 +302,11 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
     Returns:
         DataFrame combining polls, demographics, and audience metrics.
     """
+    cache_path = PROCESSED_DATA_DIR / "base_dataset_cache.pkl"
+    if cache_path.exists() and max_rows_per_file is None:
+        logger.info(f"Loading cached base dataset from {cache_path}")
+        return pd.read_pickle(cache_path)
+
     logger.info("Creating base poll dataset...")
     
     # Load raw poll data from all three sources
@@ -411,11 +415,11 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
         all_demographics_df[[
             'user_id', 'org_is_org_prob',
             'gender_male_prob',
-            'age_19_29_prob', 'age_30_39_prob', 'age_40_over_prob',
+            'age_under_29_prob', 'age_30_39_prob', 'age_40_over_prob',
         ]].rename(columns={
             'org_is_org_prob': 'author_org_prob',
             'gender_male_prob': 'author_gender_male',
-            'age_19_29_prob': 'author_age_19_29',
+            'age_under_29_prob': 'author_age_under_29',
             'age_30_39_prob': 'author_age_30_39',
             'age_40_over_prob': 'author_age_40_over',
         }),
@@ -448,7 +452,7 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
                                     if pd.notna(score):
                                         audience_engagement[tweet_id]['users'].add(user_id)
                                         audience_engagement[tweet_id]['partisanship_scores'].append(score)
-
+                                        
     logger.info("Processing retweeters...")
     process_interactions(retweeters_df)
     
@@ -460,7 +464,7 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
         scores = audience_engagement.get(tweet_id, {}).get('partisanship_scores', [])
         if scores:
             audience_stats.append({
-                'tweet_id': tweet_id,
+            'tweet_id': tweet_id,
                 'audience_mean_partisanship': np.mean(scores),
                 'audience_median_partisanship': np.median(scores),
                 'audience_n_distinct_users': len(scores)
@@ -476,6 +480,11 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
     audience_df = pd.DataFrame(audience_stats)
     unified_df = unified_df.merge(audience_df, on='tweet_id', how='left')
     
+    if max_rows_per_file is None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        unified_df.to_pickle(cache_path)
+        logger.info(f"Cached base dataset to {cache_path}")
+
     logger.success(f"Created base dataset with {len(unified_df)} polls and {len(unified_df.columns)} features")
     return unified_df
 
