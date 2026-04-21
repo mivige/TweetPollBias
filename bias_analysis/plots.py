@@ -49,10 +49,9 @@ def candidate_order(
     df = pd.read_csv(input_path)
     logger.info(f"Loaded {len(df)} poll records")
 
-    # Filter to head-to-head polls containing all main candidates
-    filter_mask = pd.Series(True, index=df.index)
-    for c in candidates:
-        filter_mask &= df[f'{c}_position'].notna()
+    # Filter to polls containing at least two valid candidates
+    candidate_cols = [f'{c}_position' for c in candidates if f'{c}_position' in df.columns]
+    filter_mask = df[candidate_cols].notna().sum(axis=1) >= 2
     head_to_head = df[filter_mask].copy()
 
     if len(head_to_head) == 0:
@@ -246,10 +245,9 @@ def appellatives(
     df = pd.read_csv(input_path)
     logger.info(f"Loaded {len(df)} poll records")
 
-    # Filter to head-to-head polls with formality data
-    filter_mask = pd.Series(True, index=df.index)
-    for c in candidates:
-        filter_mask &= df[f'{c}_label'].notna() & df[f'{c}_percentage'].notna()
+    # Filter to polls containing at least two candidates with formality data
+    candidate_cols = [f'{c}_label' for c in candidates if f'{c}_label' in df.columns]
+    filter_mask = df[candidate_cols].notna().sum(axis=1) >= 2
     head_to_head = df[filter_mask].copy()
 
     if len(head_to_head) == 0:
@@ -483,9 +481,8 @@ def leaning(
     existing_score_cols = [c for c in required_score_cols if c in df.columns]
 
     # Filter to head-to-head polls with political leaning data
-    filter_mask = pd.Series(True, index=df.index)
-    for c in candidates:
-        filter_mask &= df[f'{c}_percentage'].notna()
+    candidate_cols = [f'{c}_percentage' for c in candidates if f'{c}_percentage' in df.columns]
+    filter_mask = df[candidate_cols].notna().sum(axis=1) >= 2
     for col in existing_score_cols:
         filter_mask &= df[col].notna()
     head_to_head = df[filter_mask].copy()
