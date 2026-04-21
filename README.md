@@ -4,7 +4,19 @@
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
 </a>
 
-Twitter social-poll analysis (2020 cycle): extract candidate-order, appellatives, sentiment, emoji and political-leaning markers and study their relationship with poll biases.
+A multi-election social-poll analysis framework for Twitter. This project extracts bias markers (candidate ordering, appellatives, political leaning) and uses **Multilevel Regression and Poststratification (MRP)** to analyze how these factors correlate with poll outcomes across multiple election cycles (US 2016, 2020, 2024).
+
+## 🚀 Quick Start
+
+To run the complete pipeline (Feature Extraction → MRP Modeling → Visualizations) for a specific election:
+
+```bash
+python run_pipeline.py --election <election_code>
+```
+
+> [!TIP]
+> Available election codes: `us16`, `us20`, `us24`.
+
 
 ## Project Organization
 
