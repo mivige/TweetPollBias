@@ -21,6 +21,40 @@ MODELS_DIR = PROJ_ROOT / "models"
 REPORTS_DIR = PROJ_ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
+
+class ElectionPaths:
+    """Per-election output directory paths."""
+
+    def __init__(self, election_subdir: str):
+        self.raw_dir = RAW_DATA_DIR / election_subdir
+        self.processed_dir = PROCESSED_DATA_DIR / election_subdir
+        self.figures_dir = FIGURES_DIR / election_subdir
+        self.reports_dir = REPORTS_DIR / election_subdir
+
+    def ensure_dirs(self):
+        """Create all election-specific directories if they don't exist."""
+        for d in (self.processed_dir, self.figures_dir, self.reports_dir):
+            d.mkdir(parents=True, exist_ok=True)
+
+
+def get_election_paths(election_code: str) -> ElectionPaths:
+    """
+    Return an ElectionPaths object with paths scoped to the given election.
+
+    Args:
+        election_code: Short identifier (e.g. "us20").
+
+    Returns:
+        ElectionPaths with processed_dir, figures_dir, reports_dir.
+    """
+    from bias_analysis.election_configs import get_election_config
+
+    config = get_election_config(election_code)
+    paths = ElectionPaths(config["processed_subdir"])
+    paths.ensure_dirs()
+    return paths
+
+
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
 try:
