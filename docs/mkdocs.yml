@@ -6,4 +6,6 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Feature Extraction: features.md
+  - MRP Modeling: mrp-modeling.md
+  - Data Schema: data-schema.md
   - Visualizations & Plots: plots.md
