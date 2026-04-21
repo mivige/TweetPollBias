@@ -131,6 +131,37 @@ _US20_CONFIG = {
         ("2020-10-22", "Second & last debate (Nashville, Tennessee)"),
     ],
 
+    # ── MRP Model Configuration ───────────────────────────────────────────
+    "mrp": {
+        "actual_results": {
+            "Trump": 0.477,
+            "Biden": 0.523,
+        },
+        "partisan_strata": {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.26},
+        "ideological_strata": {"Conservative": 0.38, "Moderate": 0.38, "Liberal": 0.24},
+        "demographic_profiles": {
+            "Republican":  {"gender_male": 0.52, "age_under_29": 0.11, "age_30_39": 0.19, "age_40_over": 0.70},
+            "Democrat":    {"gender_male": 0.43, "age_under_29": 0.24, "age_30_39": 0.27, "age_40_over": 0.49},
+            "Independent": {"gender_male": 0.48, "age_under_29": 0.17, "age_30_39": 0.23, "age_40_over": 0.60},
+        },
+        "partisan_profiles": {
+            "Republican": {"aud_quantile": 0.75, "auth_quantile": 0.75, "cons_quantile": 0.75},
+            "Democrat":   {"aud_quantile": 0.25, "auth_quantile": 0.25, "cons_quantile": 0.25},
+            "Independent": {"aud_quantile": 0.50, "auth_quantile": 0.50, "cons_quantile": 0.50},
+        },
+        "ideology_offsets": {
+            "Conservative": {"cons_mult": 1.25},
+            "Moderate":     {"cons_mult": 1.00},
+            "Liberal":      {"cons_mult": 0.75},
+        },
+        "prediction_market": {
+            "source": "PredictIt (placeholder)",
+            "Trump": 0.39,
+            "Biden": 0.63,
+            "note": "These are win-probability prices, not vote-share estimates.",
+        }
+    },
+
     # ── Raw data file paths (relative to data/raw/<subdir>/) ─────────────
     # Each list must have the same length as data_source_names.
     "raw_data_paths": {

@@ -943,9 +943,6 @@ def generate_mrp_dashboard(
         fit_glm,
         build_poststrat_frame,
         poststratify,
-        ACTUAL_TRUMP_SHARE,
-        ACTUAL_BIDEN_SHARE,
-        get_prediction_market_price,
     )
 
     logger.info(f"Loading data and fitting global GLM for MRP dashboard [{election}] …")
@@ -954,8 +951,12 @@ def generate_mrp_dashboard(
         logger.error("Base dataset is empty — aborting.")
         return
 
-    df = load_and_merge_features(base_df)
-    analysis_df = df.dropna(subset=["trump_share"]).copy()
+    actual_pos_share = ecfg["mrp"]["actual_results"][positive_candidate]
+    actual_neg_share = ecfg["mrp"]["actual_results"][negative_candidate]
+    market = ecfg["mrp"]["prediction_market"]
+
+    df = load_and_merge_features(base_df, election=election)
+    analysis_df = df.dropna(subset=["positive_share"]).copy()
     logger.info(f"Analysis-ready polls: {len(analysis_df)}")
 
     if len(analysis_df) < 10:
@@ -1001,7 +1002,7 @@ def generate_mrp_dashboard(
         window_df = analysis_df.loc[mask]
 
         if len(window_df) >= 3:
-            raw_share = window_df["trump_share"].mean()
+            raw_share = window_df["positive_share"].mean()
 
             # Window-specific post-stratification
             ps_frame = build_poststrat_frame(window_df)
@@ -1026,9 +1027,6 @@ def generate_mrp_dashboard(
     rdf["date"] = pd.to_datetime(rdf["date"])
 
     logger.info(f"Computed {len(rdf)} daily data points for the dashboard.")
-
-    # Prediction market reference
-    market = get_prediction_market_price()
 
     # Build colour lookup (default fallback)
     pos_color = colors.get(positive_candidate, "#DC3545")
@@ -1090,28 +1088,29 @@ def generate_mrp_dashboard(
     x_bounds = [rdf["date"].min(), rdf["date"].max()]
 
     # Prediction market lines (green)
-    fig.add_trace(go.Scatter(
-        x=x_bounds, y=[market["trump_win_prob"] * 100, market["trump_win_prob"] * 100],
-        mode="lines", name="Prediction Markets", legendgroup="markets",
-        line=dict(color="#198754", width=1.5, dash="dot"),
-        hovertemplate=f"<b>Market - {positive_candidate}</b>: %{{y:.0f}}%<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=x_bounds, y=[market["biden_win_prob"] * 100, market["biden_win_prob"] * 100],
-        mode="lines", name="Prediction Markets", legendgroup="markets", showlegend=False,
-        line=dict(color="#20C997", width=1.5, dash="dot"),
-        hovertemplate=f"<b>Market - {negative_candidate}</b>: %{{y:.0f}}%<extra></extra>",
-    ))
+    if positive_candidate in market and negative_candidate in market:
+        fig.add_trace(go.Scatter(
+            x=x_bounds, y=[market[positive_candidate] * 100, market[positive_candidate] * 100],
+            mode="lines", name="Prediction Markets", legendgroup="markets",
+            line=dict(color="#198754", width=1.5, dash="dot"),
+            hovertemplate=f"<b>Market - {positive_candidate}</b>: %{{y:.0f}}%<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=x_bounds, y=[market[negative_candidate] * 100, market[negative_candidate] * 100],
+            mode="lines", name="Prediction Markets", legendgroup="markets", showlegend=False,
+            line=dict(color="#20C997", width=1.5, dash="dot"),
+            hovertemplate=f"<b>Market - {negative_candidate}</b>: %{{y:.0f}}%<extra></extra>",
+        ))
 
     # Actual result lines (grey)
     fig.add_trace(go.Scatter(
-        x=x_bounds, y=[ACTUAL_TRUMP_SHARE * 100, ACTUAL_TRUMP_SHARE * 100],
+        x=x_bounds, y=[actual_pos_share * 100, actual_pos_share * 100],
         mode="lines", name="Actual Results", legendgroup="actuals",
         line=dict(color="#6C757D", width=2), opacity=0.7,
         hovertemplate=f"<b>Actual - {positive_candidate}</b>: %{{y:.1f}}%<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=x_bounds, y=[ACTUAL_BIDEN_SHARE * 100, ACTUAL_BIDEN_SHARE * 100],
+        x=x_bounds, y=[actual_neg_share * 100, actual_neg_share * 100],
         mode="lines", name="Actual Results", legendgroup="actuals", showlegend=False,
         line=dict(color="#ADB5BD", width=2), opacity=0.7,
         hovertemplate=f"<b>Actual - {negative_candidate}</b>: %{{y:.1f}}%<extra></extra>",
@@ -1164,7 +1163,7 @@ def generate_mrp_dashboard(
     logger.success(f"Interactive dashboard saved to {output_path}")
 
     # Compute MAE vs actual result
-    mae = (rdf[pos_mrp_col] - ACTUAL_TRUMP_SHARE).abs().mean() * 100
+    mae = (rdf[pos_mrp_col] - actual_pos_share).abs().mean() * 100
     logger.info(f"MRP Estimate MAE vs Actual Result (across all days): {mae:.2f} pp")
 
     return rdf
