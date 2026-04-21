@@ -918,7 +918,8 @@ def generate_mrp_dashboard(
 ):
     """
     Generate an interactive Plotly time-series dashboard showing rolling
-    MRP-adjusted Twitter poll estimates vs prediction markets and actual results.
+    MRP-adjusted Twitter poll estimates, raw Twitter means, PredictIt market
+    prices, and actual results on a single unified chart.
 
     Saves output as an interactive HTML file in the election's reports directory.
     """
@@ -950,7 +951,6 @@ def generate_mrp_dashboard(
 
     actual_pos_share = ecfg["mrp"]["actual_results"][positive_candidate]
     actual_neg_share = ecfg["mrp"]["actual_results"][negative_candidate]
-    market = ecfg["mrp"]["prediction_market"]
 
     df = load_and_merge_features(base_df, election=election)
     analysis_df = df.dropna(subset=["positive_share"]).copy()
@@ -1025,10 +1025,53 @@ def generate_mrp_dashboard(
 
     logger.info(f"Computed {len(rdf)} daily data points for the dashboard.")
 
-    # Build colour lookup (default fallback)
+    # --- Load PredictIt prediction market data --------------------------------
+    predictit_path = paths.raw_dir.parent / "predictit" / f"{election}.csv"
+    predictit_df = None
+
+    if predictit_path.exists():
+        logger.info(f"Loading PredictIt data from {predictit_path}")
+        try:
+            pit = pd.read_csv(predictit_path)
+            pit["date"] = pd.to_datetime(pit["Date (ET)"], format="mixed", dayfirst=False)
+
+            # Parse European-style decimals (comma as separator)
+            pit["close"] = (
+                pit["Close Share Price"]
+                .astype(str)
+                .str.replace(",", ".", regex=False)
+                .astype(float)
+            )
+
+            # Filter to main candidates using substring matching
+            # (contract names are full names like "Donald Trump", our config uses "Trump")
+            pit["_name"] = pit["Contract Name"].str.strip()
+            pos_pit = pit[pit["_name"].str.contains(positive_candidate, case=False, na=False)].copy()
+            neg_pit = pit[pit["_name"].str.contains(negative_candidate, case=False, na=False)].copy()
+
+            if not pos_pit.empty and not neg_pit.empty:
+                pos_pit = pos_pit[["date", "close"]].rename(columns={"close": f"market_{positive_candidate.lower()}"})
+                neg_pit = neg_pit[["date", "close"]].rename(columns={"close": f"market_{negative_candidate.lower()}"})
+
+                predictit_df = pos_pit.merge(neg_pit, on="date", how="outer").sort_values("date")
+
+                # Filter to our analysis date range
+                predictit_df = predictit_df[
+                    (predictit_df["date"] >= pd.Timestamp(min(rdf["date"])))
+                    & (predictit_df["date"] <= pd.Timestamp(end_date))
+                ]
+
+                logger.success(f"Loaded {len(predictit_df)} PredictIt daily records for {positive_candidate} vs {negative_candidate}.")
+            else:
+                logger.warning("Could not find both candidates in PredictIt data.")
+        except Exception as e:
+            logger.warning(f"Failed to load PredictIt data: {e}")
+    else:
+        logger.warning(f"PredictIt CSV not found at {predictit_path}, skipping market traces.")
+
+    # --- Build colour lookup --------------------------------------------------
     pos_color = colors.get(positive_candidate, "#DC3545")
     neg_color = colors.get(negative_candidate, "#0D6EFD")
-    # Resolve matplotlib named colours to hex for Plotly
     pos_hex = _mpl_color_to_hex(pos_color)
     neg_hex = _mpl_color_to_hex(neg_color)
 
@@ -1045,6 +1088,7 @@ def generate_mrp_dashboard(
         x=rdf["date"], y=rdf[pos_mrp_col] * 100,
         mode="lines", name=f"MRP Estimate for {positive_candidate}",
         line=dict(color=pos_hex, width=2.5),
+        legendgroup="mrp",
         hovertemplate=f"<b>{positive_candidate} MRP</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
@@ -1053,26 +1097,54 @@ def generate_mrp_dashboard(
         x=rdf["date"], y=rdf[neg_mrp_col] * 100,
         mode="lines", name=f"MRP Estimate for {negative_candidate}",
         line=dict(color=neg_hex, width=2.5),
+        legendgroup="mrp",
         hovertemplate=f"<b>{negative_candidate} MRP</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
     # Raw positive candidate (dashed)
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[pos_raw_col] * 100,
-        mode="lines", name=f"Raw Mean for {positive_candidate}",
+        mode="lines", name=f"Raw Twitter Mean for {positive_candidate}",
         line=dict(color=pos_hex, width=1.5, dash="dot"),
+        opacity=0.8,
+        legendgroup="raw",
         hovertemplate=f"<b>{positive_candidate} Raw</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
     # Raw negative candidate (dashed)
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[neg_raw_col] * 100,
-        mode="lines", name=f"Raw Mean for {negative_candidate}",
+        mode="lines", name=f"Raw Twitter Mean for {negative_candidate}",
         line=dict(color=neg_hex, width=1.5, dash="dot"),
+        opacity=0.8,
+        legendgroup="raw",
         hovertemplate=f"<b>{negative_candidate} Raw</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
-    # Poll Count (invisible global trace for unified hover)
+    # PredictIt market time-series (dashdot)
+    if predictit_df is not None and not predictit_df.empty:
+        pos_mkt_col = f"market_{positive_candidate.lower()}"
+        neg_mkt_col = f"market_{negative_candidate.lower()}"
+
+        fig.add_trace(go.Scatter(
+            x=predictit_df["date"], y=predictit_df[pos_mkt_col] * 100,
+            mode="lines", name=f"PredictIt Close Price for {positive_candidate}",
+            line=dict(color=pos_hex, width=1.5, dash="dash"),
+            opacity=0.5,
+            legendgroup="market",
+            hovertemplate=f"<b>{positive_candidate} Market</b>: %{{y:.1f}}%<extra></extra>",
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=predictit_df["date"], y=predictit_df[neg_mkt_col] * 100,
+            mode="lines", name=f"PredictIt Close Price for {negative_candidate}",
+            line=dict(color=neg_hex, width=1.5, dash="dash"),
+            opacity=0.5,
+            legendgroup="market",
+            hovertemplate=f"<b>{negative_candidate} Market</b>: %{{y:.1f}}%<extra></extra>",
+        ))
+
+    # Poll Count (invisible, for hover info)
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=[50] * len(rdf),
         mode="lines", name="Polls in window",
@@ -1082,24 +1154,9 @@ def generate_mrp_dashboard(
         hovertemplate="<b>Polls in window</b>: %{customdata}<extra></extra>",
     ))
 
+    # Actual result lines (grey)
     x_bounds = [rdf["date"].min(), rdf["date"].max()]
 
-    # Prediction market lines (green)
-    if positive_candidate in market and negative_candidate in market:
-        fig.add_trace(go.Scatter(
-            x=x_bounds, y=[market[positive_candidate] * 100, market[positive_candidate] * 100],
-            mode="lines", name="Prediction Markets", legendgroup="markets",
-            line=dict(color="#198754", width=1.5, dash="dot"),
-            hovertemplate=f"<b>Market - {positive_candidate}</b>: %{{y:.0f}}%<extra></extra>",
-        ))
-        fig.add_trace(go.Scatter(
-            x=x_bounds, y=[market[negative_candidate] * 100, market[negative_candidate] * 100],
-            mode="lines", name="Prediction Markets", legendgroup="markets", showlegend=False,
-            line=dict(color="#20C997", width=1.5, dash="dot"),
-            hovertemplate=f"<b>Market - {negative_candidate}</b>: %{{y:.0f}}%<extra></extra>",
-        ))
-
-    # Actual result lines (grey)
     fig.add_trace(go.Scatter(
         x=x_bounds, y=[actual_pos_share * 100, actual_pos_share * 100],
         mode="lines", name="Actual Results", legendgroup="actuals",
@@ -1160,8 +1217,22 @@ def generate_mrp_dashboard(
     logger.success(f"Interactive dashboard saved to {output_path}")
 
     # Compute MAE vs actual result
-    mae = (rdf[pos_mrp_col] - actual_pos_share).abs().mean() * 100
-    logger.info(f"MRP Estimate MAE vs Actual Result (across all days): {mae:.2f} pp")
+    mae_actual = (rdf[pos_mrp_col] - actual_pos_share).abs().mean() * 100
+    logger.info(f"MRP Estimate MAE vs Actual Result (across all days): {mae_actual:.2f} pp")
+
+    # Compute additional metrics if PredictIt Market is available
+    if predictit_df is not None and not predictit_df.empty:
+        mkt_col = f"market_{positive_candidate.lower()}"
+        
+        # 1. Market MAE vs Actual
+        mae_mkt_actual = (predictit_df[mkt_col] - actual_pos_share).abs().mean() * 100
+        logger.info(f"PredictIt Market MAE vs Actual Result (across all market days): {mae_mkt_actual:.2f} pp")
+
+        # 2. Divergence between MRP and Market
+        merged = rdf.merge(predictit_df[["date", mkt_col]], on="date", how="inner")
+        if not merged.empty:
+            divergence = (merged[pos_mrp_col] - merged[mkt_col]).abs().mean() * 100
+            logger.info(f"Mean Divergence (MAE) between MRP and PredictIt: {divergence:.2f} pp")
 
     return rdf
 
