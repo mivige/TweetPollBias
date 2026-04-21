@@ -20,6 +20,7 @@ import numpy as np
 
 from bias_analysis.config import get_election_paths
 from bias_analysis.election_configs import get_election_config
+from bias_analysis.dataset import load_predictit_data
 
 app = typer.Typer()
 
@@ -1026,32 +1027,21 @@ def generate_mrp_dashboard(
     logger.info(f"Computed {len(rdf)} daily data points for the dashboard.")
 
     # --- Load PredictIt prediction market data --------------------------------
-    predictit_path = paths.raw_dir.parent / "predictit" / f"{election}.csv"
+    pit = load_predictit_data(election)
     predictit_df = None
 
-    if predictit_path.exists():
-        logger.info(f"Loading PredictIt data from {predictit_path}")
+    if not pit.empty:
         try:
-            pit = pd.read_csv(predictit_path)
-            pit["date"] = pd.to_datetime(pit["Date (ET)"], format="mixed", dayfirst=False)
-
-            # Parse European-style decimals (comma as separator)
-            pit["close"] = (
-                pit["Close Share Price"]
-                .astype(str)
-                .str.replace(",", ".", regex=False)
-                .astype(float)
-            )
-
             # Filter to main candidates using substring matching
             # (contract names are full names like "Donald Trump", our config uses "Trump")
             pit["_name"] = pit["Contract Name"].str.strip()
+            # We use "Close Share Price" which was cleaned in load_predictit_data
             pos_pit = pit[pit["_name"].str.contains(positive_candidate, case=False, na=False)].copy()
             neg_pit = pit[pit["_name"].str.contains(negative_candidate, case=False, na=False)].copy()
 
             if not pos_pit.empty and not neg_pit.empty:
-                pos_pit = pos_pit[["date", "close"]].rename(columns={"close": f"market_{positive_candidate.lower()}"})
-                neg_pit = neg_pit[["date", "close"]].rename(columns={"close": f"market_{negative_candidate.lower()}"})
+                pos_pit = pos_pit[["date", "Close Share Price"]].rename(columns={"Close Share Price": f"market_{positive_candidate.lower()}"})
+                neg_pit = neg_pit[["date", "Close Share Price"]].rename(columns={"Close Share Price": f"market_{negative_candidate.lower()}"})
 
                 predictit_df = pos_pit.merge(neg_pit, on="date", how="outer").sort_values("date")
 
@@ -1061,13 +1051,13 @@ def generate_mrp_dashboard(
                     & (predictit_df["date"] <= pd.Timestamp(end_date))
                 ]
 
-                logger.success(f"Loaded {len(predictit_df)} PredictIt daily records for {positive_candidate} vs {negative_candidate}.")
+                logger.success(f"Processed {len(predictit_df)} PredictIt daily records for {positive_candidate} vs {negative_candidate}.")
             else:
                 logger.warning("Could not find both candidates in PredictIt data.")
         except Exception as e:
-            logger.warning(f"Failed to load PredictIt data: {e}")
+            logger.warning(f"Failed to process PredictIt data: {e}")
     else:
-        logger.warning(f"PredictIt CSV not found at {predictit_path}, skipping market traces.")
+        logger.warning(f"No PredictIt data available for {election}, skipping market traces.")
 
     # --- Build colour lookup --------------------------------------------------
     pos_color = colors.get(positive_candidate, "#DC3545")

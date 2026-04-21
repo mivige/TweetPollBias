@@ -18,7 +18,7 @@ from loguru import logger
 from tqdm import tqdm
 import typer
 
-from bias_analysis.config import get_election_paths
+from bias_analysis.config import get_election_paths, RAW_DATA_DIR
 from bias_analysis.election_configs import get_election_config
 
 app = typer.Typer()
@@ -523,6 +523,43 @@ def get_base_dataset(
 
     logger.success(f"Created base dataset with {len(unified_df)} polls and {len(unified_df.columns)} features")
     return unified_df
+
+def load_predictit_data(election: str) -> pd.DataFrame:
+    """
+    Load and parse PredictIt market data for a given election.
+    Handles date parsing and comma-decimal conversion.
+
+    Args:
+        election: Election code (e.g. "us20").
+
+    Returns:
+        DataFrame with PredictIt data. Empty if not found.
+    """
+    predictit_path = RAW_DATA_DIR / "predictit" / f"{election}.csv"
+
+    if not predictit_path.exists():
+        logger.warning(f"PredictIt CSV not found at {predictit_path}")
+        return pd.DataFrame()
+
+    try:
+        pit = pd.read_csv(predictit_path)
+        # Handle Date (ET) parsing
+        pit["date"] = pd.to_datetime(pit["Date (ET)"], format="mixed", dayfirst=False)
+
+        # Parse European-style decimals (comma as separator)
+        for col in ["Open Share Price", "Close Share Price", "Low Share Price", "High Share Price"]:
+            if col in pit.columns:
+                pit[col] = (
+                    pit[col]
+                    .astype(str)
+                    .str.replace(",", ".", regex=False)
+                    .astype(float)
+                )
+        return pit
+    except Exception as e:
+        logger.warning(f"Failed to load PredictIt data from {predictit_path}: {e}")
+        return pd.DataFrame()
+
 
 if __name__ == "__main__":
     logger.warning("dataset.py is not intended to be run directly. Use features.py instead.")
