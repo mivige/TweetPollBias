@@ -1,16 +1,28 @@
 # Feature Extraction
 
-The `features.py` module exposes Typer CLI commands to execute various stages of the data pipeline. You can run these commands easily from the root.
+The `features.py` module exposes Typer CLI commands to execute various stages of the data pipeline. You can run these commands easily from the root, or use the unified `run_pipeline.py` script to do it all at once.
 
-## Available Commands
+## Running the Full Pipeline
+
+The easiest way to extract all features, build the MRP models, and generate dashboards is using the unified runner:
+```bash
+python run_pipeline.py --election us24
+```
+You can skip specific phases using flags like `--skip-modeling` or `--skip-plots`.
+
+---
+
+## Individual Step Commands
+
+If you need to run granular feature extraction, you can call them directly. Make sure to specify the `--election` code (e.g., `us20`, `us24`, `us16`).
 
 ### 1. Extract Candidate Order
 
-Extracts the positional placement of Candidates (Trump vs Biden) inside the poll voting options.
+Extracts the positional placement of Candidates inside the poll voting options.
 ```bash
-python -m bias_analysis.features candidate-order
+python -m bias_analysis.features candidate-order --election us24
 ```
-*Outputs to:* `data/processed/candidate_order_features.csv`
+*Outputs to:* `data/processed/<election>/candidate_order_features.csv`
 
 ---
 
@@ -18,9 +30,9 @@ python -m bias_analysis.features candidate-order
 
 Utilizes `spaCy` NER to sift through the Tweet texts and poll options to extract the exact nickname/title used to refer to candidates, labelling them as Neutral, Formal (e.g., "President Trump", "Joe Biden"), or Informal (e.g., "Sleepy Joe", "Donnie").
 ```bash
-python -m bias_analysis.features formal-vs-informal
+python -m bias_analysis.features formal-vs-informal --election us24
 ```
-*Outputs to:* `data/processed/formal_informal_appellatives.csv`
+*Outputs to:* `data/processed/<election>/formal_informal_appellatives.csv`
 
 ---
 
@@ -28,13 +40,13 @@ python -m bias_analysis.features formal-vs-informal
 
 Uses `facebook/bart-large-mnli` to parse the underlying political affiliation, conservative/liberal leaning, and pro/anti sentiment of the tweet.
 ```bash
-# To run on the full dataset:
-python -m bias_analysis.features political-leaning
+# To run on the full dataset for an election:
+python -m bias_analysis.features political-leaning --election us24
 
 # To limit to X samples for testing:
-python -m bias_analysis.features political-leaning --max-samples 100
+python -m bias_analysis.features political-leaning --election us24 --max-samples 100
 ```
-*Outputs to:* `data/processed/political_leaning_features.csv`
+*Outputs to:* `data/processed/<election>/political_leaning_features.csv`
 
 ---
 
@@ -42,10 +54,10 @@ python -m bias_analysis.features political-leaning --max-samples 100
 
 Aggregates the extracted features above to compute author bias, audience bias, and poll outcomes, followed by a rigorous multi-marker Pearson Correlation using bootstrapping and FDR-correction.
 ```bash
-python -m bias_analysis.features pearson-correlation
+python -m bias_analysis.features pearson-correlation --election us24
 ```
 *Outputs to:* 
-* `reports/pearson_correlation_results.csv`
-* `reports/correlation_analysis_summary.json`
-* `reports/figures/assumption_check_distributions.png`
-* `reports/figures/final_correlation_heatmap.png`
+* `reports/<election>/pearson_correlation_results.csv`
+* `reports/<election>/correlation_analysis_summary.json`
+* `reports/figures/<election>/assumption_check_distributions.png`
+* `reports/figures/<election>/final_correlation_heatmap.png`
