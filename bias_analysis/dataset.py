@@ -146,6 +146,34 @@ def load_user_demographics_jsonl(file_path: Path, max_rows: Optional[int] = None
     return pd.DataFrame(user_demographics)
 
 
+def load_engagement_jsonl(file_path: Path, max_rows: Optional[int] = None) -> pd.DataFrame:
+    """
+    Load JSONL files containing engagement data (retweeters/favoriters) 
+    in the format {"tweet_id": [user_dicts...]}.
+    """
+    records = []
+    logger.info(f"Loading engagement data from {file_path}")
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for i, line in enumerate(tqdm(f, desc=f"Loading {file_path.name}")):
+            if isinstance(max_rows, int) and i >= max_rows:
+                break
+            try:
+                line_data = json.loads(line.strip())
+                for tweet_id, users_list in line_data.items():
+                    records.append({'tweet_id': tweet_id, 'users_list': users_list})
+            except json.JSONDecodeError as e:
+                logger.warning(f"Error parsing line {i+1} in {file_path}: {e}")
+                continue
+
+    if not records:
+        logger.warning(f"No valid engagement data found in {file_path}")
+        return pd.DataFrame(columns=['tweet_id', 'users_list'])
+
+    logger.success(f"Loaded {len(records)} engagement records from {file_path}")
+    return pd.DataFrame(records)
+
+
 def _resolve_paths(raw_dir: Path, relative_paths: List[str]) -> List[Path]:
     """Resolve a list of relative paths against a raw data directory."""
     return [raw_dir / rp for rp in relative_paths]
@@ -279,7 +307,7 @@ def load_engagement_data(
     # Load and combine retweeter data
     retweeter_dfs = []
     for path in retweeter_paths:
-        df = load_jsonl_dataset(path, max_rows_per_file)
+        df = load_engagement_jsonl(path, max_rows_per_file)
         if not df.empty:
             df['data_source'] = path.parent.name
             retweeter_dfs.append(df)
@@ -287,7 +315,7 @@ def load_engagement_data(
     # Load and combine favoriter data
     favoriter_dfs = []
     for path in favoriter_paths:
-        df = load_jsonl_dataset(path, max_rows_per_file)
+        df = load_engagement_jsonl(path, max_rows_per_file)
         if not df.empty:
             df['data_source'] = path.parent.name
             favoriter_dfs.append(df)
@@ -443,23 +471,23 @@ def get_base_dataset(
     valid_poll_ids = set(unified_df['tweet_id'])
 
     def process_interactions(interactions_df):
-        if interactions_df.empty:
+        if interactions_df.empty or 'tweet_id' not in interactions_df.columns:
             return
         for _, row in interactions_df.iterrows():
-            for tweet_id, users_list in row.items():
-                if isinstance(users_list, list):
-                    tweet_id = str(tweet_id)
-                    if tweet_id not in valid_poll_ids:
-                        continue
-                    for user_obj in users_list:
-                        if isinstance(user_obj, dict):
-                            user_id = str(user_obj.get('id', ''))
-                            if user_id and user_id not in audience_engagement[tweet_id]['users']:
-                                if user_id in partisanship_dict:
-                                    score = partisanship_dict[user_id]
-                                    if pd.notna(score):
-                                        audience_engagement[tweet_id]['users'].add(user_id)
-                                        audience_engagement[tweet_id]['partisanship_scores'].append(score)
+            tweet_id = str(row['tweet_id'])
+            users_list = row.get('users_list', [])
+            if isinstance(users_list, list):
+                if tweet_id not in valid_poll_ids:
+                    continue
+                for user_obj in users_list:
+                    if isinstance(user_obj, dict):
+                        user_id = str(user_obj.get('id', ''))
+                        if user_id and user_id not in audience_engagement[tweet_id]['users']:
+                            if user_id in partisanship_dict:
+                                score = partisanship_dict[user_id]
+                                if pd.notna(score):
+                                    audience_engagement[tweet_id]['users'].add(user_id)
+                                    audience_engagement[tweet_id]['partisanship_scores'].append(score)
 
     logger.info("Processing retweeters...")
     process_interactions(retweeters_df)
