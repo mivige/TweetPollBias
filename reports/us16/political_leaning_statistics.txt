@@ -1,0 +1,23 @@
+=== Political Leaning Analysis - Summary Statistics ===
+
+Political Leaning Distribution:
+  neutral: 650 polls (86.1%)
+  pro-clinton: 73 polls (9.7%)
+  pro-trump: 32 polls (4.2%)
+
+Trump:
+  Total polls: 755
+  Non-zero polls: 724
+  Pro Trump: 30 polls, Mean: 68.4%, Median: 75.3%
+  Neutral: 624 polls, Mean: 53.7%, Median: 53.8%
+  Pro Clinton: 70 polls, Mean: 54.0%, Median: 52.7%
+  Overall: Mean: 54.3%, Median: 54.5%
+
+Clinton:
+  Total polls: 755
+  Non-zero polls: 730
+  Pro Trump: 32 polls, Mean: 30.5%, Median: 22.5%
+  Neutral: 628 polls, Mean: 42.1%, Median: 39.2%
+  Pro Clinton: 70 polls, Mean: 40.9%, Median: 35.7%
+  Overall: Mean: 41.5%, Median: 38.1%
+

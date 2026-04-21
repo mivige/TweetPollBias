@@ -1,0 +1,17 @@
+=== Formal vs Informal Appellatives Analysis - Summary Statistics ===
+
+Trump:
+  Total polls: 698
+  Non-zero polls: 673
+  Informal: 338 polls, Mean: 54.5%, Median: 54.5%
+  Neutral: 333 polls, Mean: 55.2%, Median: 55.8%
+  Formal: 2 polls, Mean: 79.1%, Median: 79.1%
+  Overall: Mean: 54.9%, Median: 55.6%
+
+Clinton:
+  Total polls: 698
+  Non-zero polls: 678
+  Informal: 9 polls, Mean: 23.5%, Median: 17.6%
+  Neutral: 669 polls, Mean: 41.5%, Median: 38.5%
+  Overall: Mean: 41.3%, Median: 38.1%
+

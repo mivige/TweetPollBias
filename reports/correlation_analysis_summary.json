@@ -1,9 +1,0 @@
-{
-  "total_correlations": 9,
-  "significant_raw": 8,
-  "significant_fdr": 8,
-  "large_effects": 1,
-  "medium_effects": 1,
-  "small_effects": 4,
-  "sample_size": 3297
-}

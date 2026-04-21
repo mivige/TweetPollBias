@@ -1,0 +1,10 @@
+{
+  "election": "us16",
+  "total_correlations": 9,
+  "significant_raw": 7,
+  "significant_fdr": 5,
+  "large_effects": 1,
+  "medium_effects": 1,
+  "small_effects": 5,
+  "sample_size": 413
+}
