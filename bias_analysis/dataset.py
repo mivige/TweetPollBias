@@ -2,38 +2,45 @@
 Data loading utilities for Twitter poll bias analysis.
 
 This module provides functions to load and parse JSONL files containing
-Twitter poll data from multiple sources used in the 2020 US election analysis.
+Twitter poll data from multiple sources. All election-specific file paths
+are resolved from bias_analysis.election_configs so the same loader works
+across different elections.
 """
 
 from pathlib import Path
 import json
 import pandas as pd
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from collections import defaultdict
 
 from loguru import logger
 from tqdm import tqdm
 import typer
 
-from bias_analysis.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+from bias_analysis.config import get_election_paths
+from bias_analysis.election_configs import get_election_config
 
 app = typer.Typer()
+
+# Default election code used when no election is specified.
+DEFAULT_ELECTION = "us20"
+
 
 def load_jsonl_dataset(file_path: Path, max_rows: Optional[int] = None) -> pd.DataFrame:
     """
     Load JSONL (JSON Lines) dataset into a pandas DataFrame.
-    
+
     Args:
         file_path: Path to the JSONL file.
         max_rows: Optional limit on number of rows to load.
-        
+
     Returns:
         DataFrame with loaded data. Empty if none found.
     """
     data = []
     logger.info(f"Loading data from {file_path}")
-    
+
     with open(file_path, 'r', encoding='utf-8') as f:
         for i, line in enumerate(tqdm(f, desc=f"Loading {file_path.name}")):
             if isinstance(max_rows, int) and i >= max_rows:
@@ -43,7 +50,7 @@ def load_jsonl_dataset(file_path: Path, max_rows: Optional[int] = None) -> pd.Da
             except json.JSONDecodeError as e:
                 logger.warning(f"Error parsing line {i+1} in {file_path}: {e}")
                 continue
-    
+
     if not data:
         logger.warning(f"No valid data found in {file_path}")
         return pd.DataFrame()
@@ -54,17 +61,17 @@ def load_jsonl_dataset(file_path: Path, max_rows: Optional[int] = None) -> pd.Da
 def load_user_score_jsonl(file_path: Path, max_rows: Optional[int] = None) -> pd.DataFrame:
     """
     Load JSONL files mapping user IDs to scores.
-    
+
     Args:
         file_path: Path to the JSONL file.
         max_rows: Optional limit on number of rows to load.
-        
+
     Returns:
         DataFrame with ['user_id', 'score'] columns.
     """
     user_scores = []
     logger.info(f"Loading user scores from {file_path}")
-    
+
     with open(file_path, 'r', encoding='utf-8') as f:
         for i, line in enumerate(tqdm(f, desc=f"Loading {file_path.name}")):
             if isinstance(max_rows, int) and i >= max_rows:
@@ -77,7 +84,7 @@ def load_user_score_jsonl(file_path: Path, max_rows: Optional[int] = None) -> pd
             except json.JSONDecodeError as e:
                 logger.warning(f"Error parsing line {i+1} in {file_path}: {e}")
                 continue
-    
+
     if not user_scores:
         logger.warning(f"No valid user scores found in {file_path}")
         return pd.DataFrame(columns=['user_id', 'score'])
@@ -88,17 +95,17 @@ def load_user_score_jsonl(file_path: Path, max_rows: Optional[int] = None) -> pd
 def load_user_demographics_jsonl(file_path: Path, max_rows: Optional[int] = None) -> pd.DataFrame:
     """
     Load JSONL files mapping user IDs to demographic data.
-    
+
     Args:
         file_path: Path to the JSONL file.
         max_rows: Optional limit on number of rows to load.
-        
+
     Returns:
         DataFrame with demographic columns.
     """
     user_demographics = []
     logger.info(f"Loading user demographics from {file_path}")
-    
+
     with open(file_path, 'r', encoding='utf-8') as f:
         for i, line in enumerate(tqdm(f, desc=f"Loading {file_path.name}")):
             if isinstance(max_rows, int) and i >= max_rows:
@@ -108,29 +115,29 @@ def load_user_demographics_jsonl(file_path: Path, max_rows: Optional[int] = None
                 # Each line should contain exactly one user_id: demographics pair
                 for user_id, demographics in line_data.items():
                     demo_record = {'user_id': user_id}
-                    
+
                     # Extract gender probabilities
                     if 'gender' in demographics:
                         demo_record['gender_male_prob'] = demographics['gender'].get('male', 0)
                         demo_record['gender_female_prob'] = demographics['gender'].get('female', 0)
-                    
+
                     # Extract age probabilities
                     if 'age' in demographics:
                         demo_record['age_under_29_prob'] = demographics['age'].get('<=18', 0) + demographics['age'].get('19-29', 0)
                         demo_record['age_30_39_prob'] = demographics['age'].get('30-39', 0)
                         demo_record['age_40_over_prob'] = demographics['age'].get('>=40', 0)
-                    
+
                     # Extract organization status
                     if 'org' in demographics:
                         demo_record['org_non_org_prob'] = demographics['org'].get('non-org', 0)
                         demo_record['org_is_org_prob'] = demographics['org'].get('is-org', 0)
-                    
+
                     user_demographics.append(demo_record)
-                    
+
             except json.JSONDecodeError as e:
                 logger.warning(f"Error parsing line {i+1} in {file_path}: {e}")
                 continue
-    
+
     if not user_demographics:
         logger.warning(f"No valid user demographics found in {file_path}")
         return pd.DataFrame()
@@ -138,137 +145,137 @@ def load_user_demographics_jsonl(file_path: Path, max_rows: Optional[int] = None
     logger.success(f"Loaded {len(user_demographics)} user demographic records from {file_path}")
     return pd.DataFrame(user_demographics)
 
-def load_polls(max_rows_per_file: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+
+def _resolve_paths(raw_dir: Path, relative_paths: List[str]) -> List[Path]:
+    """Resolve a list of relative paths against a raw data directory."""
+    return [raw_dir / rp for rp in relative_paths]
+
+
+def _validate_paths(paths: List[Path], label: str) -> None:
+    """Raise FileNotFoundError if any path does not exist."""
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"Required {label} data file not found: {path}")
+
+
+def load_polls(
+    election: str = DEFAULT_ELECTION,
+    max_rows_per_file: Optional[int] = None,
+) -> Tuple[pd.DataFrame, ...]:
     """
-    Load the core Twitter poll datasets (decahose, vote, voting).
-    
+    Load the core Twitter poll datasets for the given election.
+
     Args:
+        election: Election code (e.g. "us20").
         max_rows_per_file: Optional limit on rows per file.
-        
+
     Returns:
-        Tuple of (decahose_df, vote_df, voting_df) DataFrames.
-        
+        Tuple of DataFrames, one per data source.
+
     Raises:
         FileNotFoundError: If any required file is missing.
     """
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    raw_dir = paths.raw_dir
+
+    poll_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["polls"])
+    _validate_paths(poll_paths, "poll")
+
     logger.info("Loading poll datasets...")
-    
-    # Define paths to the three core poll datasets
-    decahose_input_path = RAW_DATA_DIR / "Decahose/polls.jsonl"
-    vote_input_path = RAW_DATA_DIR / "vote/poll-vote-2020.jsonl"
-    voting_input_path = RAW_DATA_DIR / "voting/poll-voting-2020.jsonl"
-    
-    # Validate all required files exist before attempting to load
-    for path in [decahose_input_path, vote_input_path, voting_input_path]:
-        if not path.exists():
-            raise FileNotFoundError(f"Required data file not found: {path}")
-    
-    # Load each dataset with progress tracking
-    decahose_df = load_jsonl_dataset(decahose_input_path, max_rows_per_file)
-    vote_df = load_jsonl_dataset(vote_input_path, max_rows_per_file)
-    voting_df = load_jsonl_dataset(voting_input_path, max_rows_per_file)
-    
+    dfs = tuple(load_jsonl_dataset(p, max_rows_per_file) for p in poll_paths)
     logger.success("Data loading completed successfully!")
-    
-    return decahose_df, vote_df, voting_df
+    return dfs
 
-def load_partisanship_scores(max_rows_per_file: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+
+def load_partisanship_scores(
+    election: str = DEFAULT_ELECTION,
+    max_rows_per_file: Optional[int] = None,
+) -> Tuple[pd.DataFrame, ...]:
     """
-    Load partisanship scores for all datasets.
-    
+    Load partisanship scores for all datasets of the given election.
+
     Args:
+        election: Election code (e.g. "us20").
         max_rows_per_file: Optional limit on rows per file.
-        
+
     Returns:
-        Tuple of (decahose, vote, voting) partisanship DataFrames.
-        
+        Tuple of partisanship DataFrames, one per data source.
+
     Raises:
         FileNotFoundError: If any required file is missing.
     """
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    raw_dir = paths.raw_dir
+
+    partisan_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["partisanship"])
+    _validate_paths(partisan_paths, "partisanship")
+
     logger.info("Loading partisanship scores datasets...")
-    
-    decahose_partisan_path = RAW_DATA_DIR / "Decahose/inference/partisanship_scores_final.jsonl"
-    vote_partisan_path = RAW_DATA_DIR / "vote/inference/partisanship_scores_all_users.jsonl"
-    voting_partisan_path = RAW_DATA_DIR / "voting/inference/partisan-voting-2020.jsonl"
-    
-    # Validate all required files exist before attempting to load
-    for path in [decahose_partisan_path, vote_partisan_path, voting_partisan_path]:
-        if not path.exists():
-            raise FileNotFoundError(f"Required partisanship data file not found: {path}")
-    
-    decahose_partisanship_df = load_user_score_jsonl(decahose_partisan_path, max_rows_per_file)
-    vote_partisanship_df = load_user_score_jsonl(vote_partisan_path, max_rows_per_file)
-    voting_partisanship_df = load_user_score_jsonl(voting_partisan_path, max_rows_per_file)
-    
+    dfs = tuple(load_user_score_jsonl(p, max_rows_per_file) for p in partisan_paths)
     logger.success("Partisanship scores loading completed successfully!")
-    
-    return decahose_partisanship_df, vote_partisanship_df, voting_partisanship_df
+    return dfs
 
-def load_demographic_data(max_rows_per_file: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+
+def load_demographic_data(
+    election: str = DEFAULT_ELECTION,
+    max_rows_per_file: Optional[int] = None,
+) -> Tuple[pd.DataFrame, ...]:
     """
-    Load demographic inference data for all datasets.
-    
+    Load demographic inference data for all datasets of the given election.
+
     Args:
+        election: Election code (e.g. "us20").
         max_rows_per_file: Optional limit on rows per file.
-        
+
     Returns:
-        Tuple of (decahose, vote, voting) demographic DataFrames.
-        
+        Tuple of demographic DataFrames, one per data source.
+
     Raises:
         FileNotFoundError: If any required file is missing.
     """
-    logger.info("Loading demographic inference datasets...")
-    
-    decahose_demographic_path = RAW_DATA_DIR / "Decahose/inference/m3inf_output_final.jsonl"
-    vote_demographic_path = RAW_DATA_DIR / "vote/inference/m3inf_output_all_users.jsonl"
-    voting_demographic_path = RAW_DATA_DIR / "voting/inference/m3inf-voting-2020.jsonl"
-    
-    # Validate all required files exist before attempting to load
-    for path in [decahose_demographic_path, vote_demographic_path, voting_demographic_path]:
-        if not path.exists():
-            raise FileNotFoundError(f"Required demographic data file not found: {path}")
-    
-    decahose_demographic_df = load_user_demographics_jsonl(decahose_demographic_path, max_rows_per_file)
-    vote_demographic_df = load_user_demographics_jsonl(vote_demographic_path, max_rows_per_file)
-    voting_demographic_df = load_user_demographics_jsonl(voting_demographic_path, max_rows_per_file)
-    
-    logger.success("Demographic inference data loading completed successfully!")
-    
-    return decahose_demographic_df, vote_demographic_df, voting_demographic_df
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    raw_dir = paths.raw_dir
 
-def load_engagement_data(max_rows_per_file: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    demo_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["demographics"])
+    _validate_paths(demo_paths, "demographic")
+
+    logger.info("Loading demographic inference datasets...")
+    dfs = tuple(load_user_demographics_jsonl(p, max_rows_per_file) for p in demo_paths)
+    logger.success("Demographic inference data loading completed successfully!")
+    return dfs
+
+
+def load_engagement_data(
+    election: str = DEFAULT_ELECTION,
+    max_rows_per_file: Optional[int] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Load retweeter and favoriter engagement data across all datasets.
-    
+
     Args:
+        election: Election code (e.g. "us20").
         max_rows_per_file: Optional limit on rows per file.
-        
+
     Returns:
         Tuple of (retweeters_df, favoriters_df) combined DataFrames.
-        
+
     Raises:
         FileNotFoundError: If any required file is missing.
     """
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    raw_dir = paths.raw_dir
+
+    retweeter_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["retweeters"])
+    favoriter_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["favoriters"])
+    _validate_paths(retweeter_paths, "retweeter engagement")
+    _validate_paths(favoriter_paths, "favoriter engagement")
+
     logger.info("Loading engagement data (retweeters and favoriters)...")
-    
-    retweeter_paths = [
-        RAW_DATA_DIR / "Decahose/retweeters.jsonl",
-        RAW_DATA_DIR / "vote/retweet-vote-2020.jsonl", 
-        RAW_DATA_DIR / "voting/retweet-voting-2020.jsonl"
-    ]
-    
-    favoriter_paths = [
-        RAW_DATA_DIR / "Decahose/favoriters.jsonl",
-        RAW_DATA_DIR / "vote/favorite-vote-2020.jsonl",
-        RAW_DATA_DIR / "voting/favoriters-voting-2020.jsonl"
-    ]
-    
-    # Validate all required files exist
-    all_paths = retweeter_paths + favoriter_paths
-    for path in all_paths:
-        if not path.exists():
-            raise FileNotFoundError(f"Required engagement data file not found: {path}")
-    
+
     # Load and combine retweeter data
     retweeter_dfs = []
     for path in retweeter_paths:
@@ -276,96 +283,97 @@ def load_engagement_data(max_rows_per_file: Optional[int] = None) -> Tuple[pd.Da
         if not df.empty:
             df['data_source'] = path.parent.name
             retweeter_dfs.append(df)
-    
-    # Load and combine favoriter data  
+
+    # Load and combine favoriter data
     favoriter_dfs = []
     for path in favoriter_paths:
         df = load_jsonl_dataset(path, max_rows_per_file)
         if not df.empty:
             df['data_source'] = path.parent.name
             favoriter_dfs.append(df)
-    
+
     all_retweeters_df = pd.concat(retweeter_dfs, ignore_index=True) if retweeter_dfs else pd.DataFrame()
     all_favoriters_df = pd.concat(favoriter_dfs, ignore_index=True) if favoriter_dfs else pd.DataFrame()
-    
+
     logger.success(f"Loaded {len(all_retweeters_df)} retweeter records and {len(all_favoriters_df)} favoriter records")
-    
+
     return all_retweeters_df, all_favoriters_df
 
-def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
+
+def get_base_dataset(
+    election: str = DEFAULT_ELECTION,
+    max_rows_per_file: Optional[int] = None,
+) -> pd.DataFrame:
     """
     Create a unified poll-level dataset from raw sources. Excludes polls with 0 votes.
-    
+
     Args:
+        election: Election code (e.g. "us20").
         max_rows_per_file: Optional limit on rows per file.
-        
+
     Returns:
         DataFrame combining polls, demographics, and audience metrics.
     """
-    cache_path = PROCESSED_DATA_DIR / "base_dataset_cache.pkl"
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    source_names = ecfg["data_source_names"]
+
+    cache_path = paths.processed_dir / "base_dataset_cache.pkl"
     if cache_path.exists() and max_rows_per_file is None:
         logger.info(f"Loading cached base dataset from {cache_path}")
         return pd.read_pickle(cache_path)
 
-    logger.info("Creating base poll dataset...")
-    
-    # Load raw poll data from all three sources
-    decahose_polls, vote_polls, voting_polls = load_polls(max_rows_per_file)
-    
+    logger.info(f"Creating base poll dataset for [{election}]...")
+
+    # Load raw poll data from all sources
+    poll_dfs = load_polls(election, max_rows_per_file)
+
     # Load auxiliary datasets (partisanship, demographics, engagement)
     logger.info("Loading auxiliary data sources...")
-    partisanship_dfs = load_partisanship_scores(max_rows_per_file)
-    demographic_dfs = load_demographic_data(max_rows_per_file)
-    retweeters_df, favoriters_df = load_engagement_data(max_rows_per_file)
-    
+    partisanship_dfs = load_partisanship_scores(election, max_rows_per_file)
+    demographic_dfs = load_demographic_data(election, max_rows_per_file)
+    retweeters_df, favoriters_df = load_engagement_data(election, max_rows_per_file)
+
     # Merge partisanship scores
-    all_partisanship_df = pd.concat([
-        partisanship_dfs[0],
-        partisanship_dfs[1], 
-        partisanship_dfs[2]
-    ], ignore_index=True)
-    
+    all_partisanship_df = pd.concat(list(partisanship_dfs), ignore_index=True)
+
     all_partisanship_df['user_id'] = all_partisanship_df['user_id'].astype(str)
     all_partisanship_df['score'] = pd.to_numeric(all_partisanship_df['score'], errors='coerce')
     all_partisanship_df = all_partisanship_df.drop_duplicates(subset=['user_id'], keep='first')
-    
+
     # Merge demographic data
-    all_demographics_df = pd.concat([
-        demographic_dfs[0],
-        demographic_dfs[1],
-        demographic_dfs[2]
-    ], ignore_index=True)
-    
+    all_demographics_df = pd.concat(list(demographic_dfs), ignore_index=True)
+
     all_demographics_df['user_id'] = all_demographics_df['user_id'].astype(str)
     all_demographics_df = all_demographics_df.drop_duplicates(subset=['user_id'], keep='first')
-    
+
     # Extract poll metadata
     all_polls = []
     seen_poll_ids = set()
-    
-    for polls_df, source_name in [(decahose_polls, 'decahose'), (vote_polls, 'vote'), (voting_polls, 'voting')]:
+
+    for polls_df, source_name in zip(poll_dfs, source_names):
         for _, row in polls_df.iterrows():
             poll_id = str(row.get('id', ''))
-            
+
             if poll_id in seen_poll_ids:
                 continue
             seen_poll_ids.add(poll_id)
-            
+
             if not isinstance(row.get('entities'), dict):
                 continue
             entities = row['entities']
             if 'polls' not in entities or not entities['polls']:
                 continue
-                
+
             poll = entities['polls'][0]
             options = poll.get('options', [])
             if not options:
                 continue
-            
+
             total_votes = sum(option.get('votes', 0) for option in options)
             if total_votes == 0:
                 continue
-                
+
             poll_record = {
                 'tweet_id': poll_id,
                 'author_id': str(row.get('user', {}).get('id_str', '')),
@@ -376,41 +384,41 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
                 'n_options': len(options),
                 'total_votes': total_votes
             }
-            
+
             poll_options = []
             for option in options:
                 option_text = option.get('label', option.get('text', '')).strip()
                 votes = option.get('votes', 0)
                 position = option.get('position', 0)
                 poll_options.append({'position': position, 'label': option_text, 'votes': votes})
-                
+
             poll_record['poll_options'] = str(poll_options)
             all_polls.append(poll_record)
-    
+
     unified_df = pd.DataFrame(all_polls)
     logger.info(f"Extracted {len(unified_df)} valid polls >0 votes")
-    
+
     if unified_df.empty:
         return unified_df
-        
+
     unified_df['tweet_id'] = unified_df['tweet_id'].astype(str)
     unified_df['author_id'] = unified_df['author_id'].astype(str)
-    
+
     # Attach author characteristics
     unified_df = unified_df.merge(
         all_partisanship_df[['user_id', 'score']].rename(columns={'score': 'author_partisanship_raw'}),
         left_on='author_id', right_on='user_id', how='left'
     )
-    
+
     partisanship_raw = unified_df['author_partisanship_raw']
     partisanship_mean = partisanship_raw.mean()
     partisanship_std = partisanship_raw.std()
-    
+
     if pd.notna(partisanship_mean) and pd.notna(partisanship_std) and partisanship_std > 0:
         unified_df['author_partisanship'] = (partisanship_raw - partisanship_mean) / partisanship_std
     else:
         unified_df['author_partisanship'] = partisanship_raw
-    
+
     unified_df = unified_df.merge(
         all_demographics_df[[
             'user_id', 'org_is_org_prob',
@@ -425,15 +433,15 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
         }),
         left_on='author_id', right_on='user_id', how='left', suffixes=('', '_demo')
     )
-    
+
     # Compute audience metrics
     logger.info("Calculating audience metrics...")
     audience_engagement = defaultdict(lambda: {'users': set(), 'partisanship_scores': []})
-    
+
     logger.info("Building user partisanship dictionary for fast lookups...")
     partisanship_dict = dict(zip(all_partisanship_df['user_id'].astype(str), all_partisanship_df['score']))
     valid_poll_ids = set(unified_df['tweet_id'])
-    
+
     def process_interactions(interactions_df):
         if interactions_df.empty:
             return
@@ -452,13 +460,13 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
                                     if pd.notna(score):
                                         audience_engagement[tweet_id]['users'].add(user_id)
                                         audience_engagement[tweet_id]['partisanship_scores'].append(score)
-                                        
+
     logger.info("Processing retweeters...")
     process_interactions(retweeters_df)
-    
+
     logger.info("Processing favoriters...")
     process_interactions(favoriters_df)
-    
+
     audience_stats = []
     for tweet_id in unified_df['tweet_id']:
         scores = audience_engagement.get(tweet_id, {}).get('partisanship_scores', [])
@@ -476,10 +484,10 @@ def get_base_dataset(max_rows_per_file: Optional[int] = None) -> pd.DataFrame:
                 'audience_median_partisanship': np.nan,
                 'audience_n_distinct_users': 0
             })
-    
+
     audience_df = pd.DataFrame(audience_stats)
     unified_df = unified_df.merge(audience_df, on='tweet_id', how='left')
-    
+
     if max_rows_per_file is None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         unified_df.to_pickle(cache_path)
