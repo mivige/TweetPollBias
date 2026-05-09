@@ -67,15 +67,36 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
     if fi_path.exists():
         fi_df = pd.read_csv(fi_path)
         fi_df["poll_id"] = fi_df["poll_id"].astype(str)
-        df = df.merge(
-            fi_df[["poll_id", f"{cand_pos}_label", f"{cand_neg}_label"]],
-            left_on="tweet_id", right_on="poll_id", how="left",
-            suffixes=("", "_fi"),
-        )
-        label_map = {"formal": 1.0, "informal": -1.0, "neutral": 0.0}
-        pos_formal = df[f"{cand_pos}_label"].map(label_map).fillna(0.0)
-        neg_formal = df[f"{cand_neg}_label"].map(label_map).fillna(0.0)
-        df["formality_bias"] = pos_formal - neg_formal
+
+        # Prefer new formality_score columns (0-6 van den Berg scale)
+        pos_score_col = f"{cand_pos}_formality_score"
+        neg_score_col = f"{cand_neg}_formality_score"
+        if pos_score_col in fi_df.columns and neg_score_col in fi_df.columns:
+            df = df.merge(
+                fi_df[["poll_id", pos_score_col, neg_score_col]],
+                left_on="tweet_id", right_on="poll_id", how="left",
+                suffixes=("", "_fi"),
+            )
+            # formality_bias in [-1, +1]: (pos_score - neg_score) / 6
+            pos_f = df[pos_score_col].fillna(3.0)  # 3 = LN (neutral midpoint)
+            neg_f = df[neg_score_col].fillna(3.0)
+            df["formality_bias"] = np.clip((pos_f - neg_f) / 6.0, -1.0, 1.0)
+        else:
+            # Legacy fallback: old {C}_label columns with formal/informal/neutral
+            merge_cols = ["poll_id"]
+            if f"{cand_pos}_label" in fi_df.columns:
+                merge_cols.append(f"{cand_pos}_label")
+            if f"{cand_neg}_label" in fi_df.columns:
+                merge_cols.append(f"{cand_neg}_label")
+            df = df.merge(
+                fi_df[merge_cols],
+                left_on="tweet_id", right_on="poll_id", how="left",
+                suffixes=("", "_fi"),
+            )
+            label_map = {"formal": 1.0, "informal": -1.0, "neutral": 0.0}
+            pos_formal = df.get(f"{cand_pos}_label", pd.Series(dtype=float)).map(label_map).fillna(0.0)
+            neg_formal = df.get(f"{cand_neg}_label", pd.Series(dtype=float)).map(label_map).fillna(0.0)
+            df["formality_bias"] = np.clip(pos_formal - neg_formal, -1.0, 1.0)
     else:
         logger.warning(f"Missing {fi_path.name} — formality_bias will be 0")
         df["formality_bias"] = 0.0
