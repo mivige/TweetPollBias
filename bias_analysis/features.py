@@ -438,22 +438,47 @@ def political_leaning(
 @app.command()
 def formal_vs_informal(
     election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
+    skip_ned: bool = typer.Option(False, "--skip-ned", help="Skip DBpedia Spotlight NED (faster, more false positives)"),
+    ned_confidence: float = typer.Option(0.5, help="DBpedia Spotlight confidence threshold (0-1)"),
+    ned_url: str = typer.Option(
+        "https://api.dbpedia-spotlight.org/en/annotate",
+        help="DBpedia Spotlight endpoint URL",
+    ),
 ):
     """
-    Extracts formal vs informal appellatives for candidates from poll options and tweet texts.
+    Extracts candidate call-outs from poll options/tweet texts and classifies
+    their formality via the van den Berg et al. (2019) naming-form taxonomy.
 
-    Output CSV structure:
-    - {Candidate}_text: First appellative found (uncutted)
-    - {Candidate}_label: Suggested formality label ('formal', 'informal', 'neutral')
-    - {Candidate}_votes: Vote count
-    - {Candidate}_percentage: Vote percentage
+    Pipeline per text:
+      1. NER (spaCy PERSON) + regex fallback  -> raw mention spans
+      2. NED (DBpedia Spotlight)              -> filter false positives
+      3. Deduplication                        -> keep longest span per candidate
+      4. Formality classification (van den Berg 2019 + extensions):
+           6 TFNLN  Title+First+Last  ("President Donald Trump")
+           5 TLN    Title+Last        ("President Trump")
+           4 FNLN   First+Last        ("Donald Trump")
+           3 LN     Last only         ("Trump")
+           2 FN     First only        ("Donald")
+           1 PET_NAME Pet/nickname    ("Donnie", "Sleepy Joe")
+           0 ADJ_NAME Derog adj+name  ("Crooked Hillary")
+
+    Output CSV per candidate:
+      {C}_text, {C}_formality_score (0-6), {C}_formality_category,
+      {C}_votes, {C}_percentage
     """
+    import time
+
     ecfg = get_election_config(election)
     paths = get_election_paths(election)
     candidates = ecfg["candidates"]
+    candidate_naming_cfg = ecfg.get("candidate_naming", {})
     appellative_patterns_cfg = ecfg["appellative_patterns"]
 
     logger.info(f"Starting formal vs informal appellatives extraction for [{election}]...")
+    if skip_ned:
+        logger.warning("NED disabled (--skip-ned): false positives will not be filtered.")
+    else:
+        logger.info(f"NED endpoint: {ned_url}  confidence={ned_confidence}")
 
     # Initialize spaCy NLP pipeline for named entity recognition
     # The English model provides person entity detection and linguistic analysis
@@ -469,105 +494,249 @@ def formal_vs_informal(
         logger.error("spaCy English model not found. Please download with: python -m spacy download en_core_web_sm")
         return
 
-    def suggest_formality_label(appellative_text):
+    # ── requests (optional, for NED) ─────────────────────────────────────────
+    _requests = None
+    if not skip_ned:
+        try:
+            import requests as _requests
+        except ImportError:
+            logger.warning("requests not installed — falling back to --skip-ned mode.")
+            skip_ned = True
+
+    # ── NED helper ────────────────────────────────────────────────────────────
+    def disambiguate_with_dbpedia(text: str) -> dict:
         """
-        Automatically categorizes appellatives by formality level.
-
-        Args:
-            appellative_text (str): The appellative text to analyze
-
-        Returns:
-            str: Suggested formality label ('formal', 'informal', 'neutral')
+        Call DBpedia Spotlight on *text*; return {CanonicalName: surface_form}
+        for any confirmed candidate. Filters false positives by matching the
+        returned DBpedia URI against the expected URI in candidate_naming_cfg.
+        Falls back to {} on any error.
         """
-        if not appellative_text:
-            return 'neutral'
+        if not text or not text.strip():
+            return {}
+        uri_to_cname = {
+            info["dbpedia_uri"]: cname
+            for cname, info in candidate_naming_cfg.items()
+            if "dbpedia_uri" in info
+        }
+        confirmed = {}
+        rejected = []
+        for attempt in range(3):
+            try:
+                resp = _requests.post(
+                    ned_url,
+                    headers={"Accept": "application/json"},
+                    data={"text": text, "confidence": ned_confidence,
+                          "support": 10, "types": "DBpedia:Person"},
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    for res in resp.json().get("Resources", []):
+                        uri     = res.get("@URI", "")
+                        surface = res.get("@surfaceForm", "")
+                        if uri in uri_to_cname:
+                            cn = uri_to_cname[uri]
+                            if cn not in confirmed or len(surface) > len(confirmed[cn]):
+                                confirmed[cn] = surface
+                        else:
+                            rejected.append(surface)
+                    return {"confirmed": confirmed, "rejected": rejected}
+                elif resp.status_code == 503:
+                    time.sleep(2 ** attempt)
+                else:
+                    return {"confirmed": {}, "rejected": []}
+            except Exception:
+                time.sleep(2 ** attempt)
+        return {"confirmed": {}, "rejected": []}
 
-        text_lower = appellative_text.lower().strip()
+    # ── Raw mention extraction (Step 1) ───────────────────────────────────────
+    # Build set of valid preceding words globally to avoid doing it per-text
+    _VALID_PRECEDING_WORDS = set()
+    for cname in candidates:
+        info = candidate_naming_cfg.get(cname, {})
+        for t in info.get("titles", []):
+            _VALID_PRECEDING_WORDS.update([w.lower() for w in t.split()])
+        for d in info.get("derogatory_adjectives", []):
+            _VALID_PRECEDING_WORDS.update([w.lower() for w in d.split()])
+        first = info.get("first_name", "")
+        if first:
+            _VALID_PRECEDING_WORDS.add(first.lower())
+        for a in info.get("alt_first_names", []):
+            _VALID_PRECEDING_WORDS.update([w.lower() for w in a.split()])
+        for p in info.get("pet_names", []):
+            _VALID_PRECEDING_WORDS.update([w.lower() for w in p.split()])
 
-        formal_patterns = [
-            'president', 'mr.', 'mr ', 'senator', 'vice president', 'former president',
-            'the president', 'commander in chief', 'potus', 'democratic nominee',
-            'republican nominee', 'candidate', 'former vice president'
-        ]
+    # This will be populated after loading the dataset
+    text_to_doc = {}
 
-        informal_patterns = [
-            'sleepy', 'crooked', 'crazy', 'lyin', 'little', 'corrupt', 'basement',
-            'dementia', 'orange', 'donnie', 'joey', 'joe', 'don', 'creepy'
-        ]
-
-        # Check for formal indicators first (tend to be more specific)
-        for pattern in formal_patterns:
-            if pattern in text_lower:
-                return 'formal'
-
-        # Then check for informal indicators
-        for pattern in informal_patterns:
-            if pattern in text_lower:
-                return 'informal'
-
-        # Default classification for standard name usage without clear formality markers
-        return 'neutral'
-
-    def extract_appellatives_from_text(text, target_candidates=None):
-        """
-        Identifies and extracts candidate appellatives from text using NLP.
-
-        Args:
-            text (str): Text to analyze (poll option or tweet content)
-            target_candidates (list): Lowercase candidate names to search for
-
-        Returns:
-            dict: Mapping of candidate names to first appellative found
-        """
-        if target_candidates is None:
-            target_candidates = [c.lower() for c in candidates]
-
+    def extract_raw_mentions(text: str) -> dict:
+        """spaCy NER + regex fallback; returns {cname_lower: [spans]}."""
         if not text or not isinstance(text, str):
             return {}
-
-        appellatives = {}
-
-        # Use spaCy NER to identify person entities and their context
-        doc = nlp(text)
+        mentions = {c.lower(): [] for c in candidates}
+        doc = text_to_doc.get(text)
+        if doc is None:
+            doc = nlp(text)
 
         for ent in doc.ents:
-            if ent.label_ == "PERSON":
-                start_idx = max(0, ent.start - 3)
-                end_idx = min(len(doc), ent.end + 3)
+            if ent.label_ != "PERSON":
+                continue
+            
+            # Smart context expansion: only include previous tokens if relevant
+            start_idx = ent.start
+            while start_idx > 0 and start_idx >= ent.start - 3:
+                prev_token = doc[start_idx - 1].text.lower().strip('.')
+                if prev_token in _VALID_PRECEDING_WORDS:
+                    start_idx -= 1
+                else:
+                    break
 
-                full_span = doc[start_idx:end_idx].text
-                entity_text = ent.text.lower()
+            span = doc[start_idx:ent.end].text.strip()
+            span = re.sub(r'^(and|or|but|the|a|an|with|for|against|vs\.?|versus)\s+', '', span, flags=re.IGNORECASE)
+            span = re.sub(r'\s+(and|or|but|with|for|against|vs\.?|versus|will|would|should|could)$', '', span, flags=re.IGNORECASE).strip()
+            el = ent.text.lower()
+            for cname in candidates:
+                info     = candidate_naming_cfg.get(cname, {})
+                last_l   = info.get("last_name", cname).lower()
+                first_l  = info.get("first_name", "").lower()
+                alt_first_l = [a.lower() for a in info.get("alt_first_names", [])]
+                pets_l   = [p.lower() for p in info.get("pet_names", [])]
+                titles_l = [t.lower().rstrip('.') for t in info.get("titles", [])]
+                derogs_l = [d.lower() for d in info.get("derogatory_adjectives", [])]
 
-                # Check if this entity refers to our target candidates
-                for candidate in target_candidates:
-                    if candidate in entity_text and candidate not in appellatives:
-                        # Clean up extracted appellative by removing non-essential words
-                        appellative = full_span.strip()
-                        # Remove conjunctions and prepositions that don't add meaning
-                        appellative = re.sub(r'^(and|or|but|the|a|an|with|for|against|vs|versus)\s+', '', appellative, flags=re.IGNORECASE)
-                        appellative = re.sub(r'\s+(and|or|but|with|for|against|vs|versus|will|would|should|could)$', '', appellative, flags=re.IGNORECASE)
-                        appellatives[candidate] = appellative.strip()
+                matched_by_last  = last_l  and last_l  in el
+                matched_by_first = (first_l and first_l in el) or any(a and a in el for a in alt_first_l)
 
-        # Fallback: regex patterns from election config
-        for candidate in target_candidates:
-            if candidate not in appellatives:
-                patterns = appellative_patterns_cfg.get(candidate, [])
+                if not (matched_by_last or matched_by_first):
+                    continue
 
-                # Apply patterns and capture first match
-                for pattern in patterns:
-                    match = re.search(pattern, text, re.IGNORECASE)
-                    if match:
-                        appellatives[candidate] = match.group(0).strip()
+                # ── False-positive guard ────────────────────────────────────
+                # If matched via last name, check whether a *different* proper
+                # noun precedes it (e.g. "Hunter" in "Hunter Biden").
+                # Valid preceding tokens: the candidate's own first name,
+                # pet/nick names, title words, derogatory adjectives (still
+                # relevant for ADJ_NAME), or no preceding word at all.
+                if matched_by_last and not matched_by_first:
+                    valid_preceding = (
+                        {first_l}
+                        | set([a.split()[0] for a in alt_first_l]) # e.g. 'joseph' from 'joseph r.'
+                        | set(pets_l)
+                        | set(titles_l)
+                        | set(derogs_l)
+                        | {""}   # nothing before the last name is fine
+                    )
+                    # Find the word immediately before the last name in the entity text
+                    pre_match = re.search(
+                        r'\b(\w+)\s+' + re.escape(last_l) + r'\b', el, re.I
+                    )
+                    if pre_match:
+                        preceding_word = pre_match.group(1).lower().rstrip('.')
+                        if preceding_word not in valid_preceding:
+                            # "Hunter Biden", "Beau Biden", etc. → skip
+                            continue
+                # ────────────────────────────────────────────────────────────
+
+                mentions[cname.lower()].append(span)
+
+        # Regex fallback for any candidate still empty
+        for cname in candidates:
+            key = cname.lower()
+            if not mentions[key]:
+                for pattern in appellative_patterns_cfg.get(key, []):
+                    m = re.search(pattern, text, re.IGNORECASE)
+                    if m:
+                        mentions[key].append(m.group(0).strip())
                         break
 
-        return appellatives
+        return {k: v for k, v in mentions.items() if v}
 
-    # Load the unified foundational dataset
+    # ── Formality classifier (Step 4) ─────────────────────────────────────────
+    _FORMALITY_SCALE = {
+        "TFNLN": 6, "TLN": 5, "FNLN": 4, "LN": 3,
+        "FN": 2, "PET_NAME": 1, "ADJ_NAME": 0,
+    }
+
+    def classify_formality_vandenberg(span: str, cname: str) -> tuple:
+        """Return (score 0-6, category_code) for the given mention span."""
+        if not span:
+            return (_FORMALITY_SCALE["LN"], "LN")
+        info     = candidate_naming_cfg.get(cname, {})
+        first    = info.get("first_name", "")
+        alt_first_names = info.get("alt_first_names", [])
+        last     = info.get("last_name", cname)
+        titles   = info.get("titles", [])
+        pets     = info.get("pet_names", [])
+        derogs   = info.get("derogatory_adjectives", [])
+
+        def _any(words):
+            return r'\b(?:' + '|'.join(re.escape(w) for w in words if w) + r')\b'
+
+        has_last  = bool(last)   and bool(re.search(r'\b' + re.escape(last)  + r'\b', span, re.I))
+        has_first = bool(first)  and bool(re.search(r'\b' + re.escape(first) + r'\b', span, re.I))
+        if not has_first and alt_first_names:
+            has_first = bool(re.search(_any(alt_first_names), span, re.I))
+        has_title = bool(titles) and bool(re.search(_any(titles), span, re.I))
+
+        # ADJ_NAME: derogatory adjective present
+        if derogs and re.search(_any(derogs), span, re.I):
+            return (_FORMALITY_SCALE["ADJ_NAME"], "ADJ_NAME")
+
+        # PET_NAME: recognised nickname/pet name
+        if pets:
+            for pname in pets:
+                if re.search(r'\b' + re.escape(pname) + r'\b', span, re.I):
+                    return (_FORMALITY_SCALE["PET_NAME"], "PET_NAME")
+
+        if has_title and has_first and has_last:
+            return (_FORMALITY_SCALE["TFNLN"], "TFNLN")
+        if has_title and has_last:
+            return (_FORMALITY_SCALE["TLN"], "TLN")
+        if has_first and has_last:
+            return (_FORMALITY_SCALE["FNLN"], "FNLN")
+        if has_last:
+            return (_FORMALITY_SCALE["LN"], "LN")
+        if has_first:
+            return (_FORMALITY_SCALE["FN"], "FN")
+        return (_FORMALITY_SCALE["LN"], "LN")
+
+    # ── Load dataset ──────────────────────────────────────────────────────────
     base_df = get_base_dataset(election=election)
-
     if base_df.empty:
         logger.warning("Base dataset is empty. Cannot extract appellatives.")
         return
+
+    # ── Pre-computation (Speed Optimization) ──────────────────────────────────
+    all_texts = set()
+    for _, row in base_df.iterrows():
+        tweet_text = row.get('tweet_text', '') or ''
+        if tweet_text:
+            all_texts.add(tweet_text)
+        try:
+            options = ast.literal_eval(row['poll_options'])
+            for opt in options:
+                opt_text = opt.get('label', '')
+                if opt_text:
+                    all_texts.add(opt_text)
+        except Exception:
+            pass
+    all_texts = list(all_texts)
+
+    # Pre-compute spaCy docs using nlp.pipe
+    logger.info(f"Batch processing {len(all_texts)} unique texts with spaCy...")
+    for text, doc in zip(all_texts, nlp.pipe(all_texts, disable=["tagger", "parser", "attribute_ruler", "lemmatizer"], batch_size=256)):
+        text_to_doc[text] = doc
+
+    # Pre-compute NED using ThreadPoolExecutor
+    ned_cache: dict = {}   # text -> NED result
+    if not skip_ned:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        logger.info(f"Batch querying DBpedia for {len(all_texts)} unique texts using 50 workers...")
+        def safe_query(t):
+            return t, disambiguate_with_dbpedia(t)
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            future_to_text = {executor.submit(safe_query, t): t for t in all_texts}
+            for future in tqdm(as_completed(future_to_text), total=len(all_texts), desc="NED Queries"):
+                t, res = future.result()
+                ned_cache[t] = res
 
     appellative_data = []
 
@@ -578,95 +747,159 @@ def formal_vs_informal(
             options = ast.literal_eval(row['poll_options'])
         except Exception:
             continue
-
         if not options:
             continue
 
-        total_votes = row['total_votes']
-        if total_votes == 0:
-            total_votes = 1
+        total_votes = row['total_votes'] or 1
 
-        # Initialize record with minimal metadata
         poll_record = {
             'poll_id': str(row['tweet_id']),
             'total_votes': total_votes,
-            'num_options': row['n_options']
+            'num_options': row['n_options'],
         }
-
-        # Pre-populate appellative columns for consistent CSV structure
         for candidate in candidates:
-            poll_record[f'{candidate}_text'] = None      # Raw appellative found
-            poll_record[f'{candidate}_label'] = None     # Suggested formality label
-            poll_record[f'{candidate}_votes'] = None     # Vote count for this candidate
-            poll_record[f'{candidate}_percentage'] = None # Vote percentage for this candidate
+            poll_record[f'{candidate}_text']               = None
+            poll_record[f'{candidate}_formality_score']    = None
+            poll_record[f'{candidate}_formality_category'] = None
+            poll_record[f'{candidate}_votes']              = None
+            poll_record[f'{candidate}_percentage']         = None
 
-        # Extract appellatives from main tweet text
-        tweet_appellatives = extract_appellatives_from_text(row.get('tweet_text', ''))
+        # NED on tweet text (cached)
+        tweet_text = row.get('tweet_text', '') or ''
+        if not skip_ned:
+            if tweet_text not in ned_cache:
+                ned_cache[tweet_text] = disambiguate_with_dbpedia(tweet_text)
+            tweet_ned = ned_cache[tweet_text]
+        else:
+            tweet_ned = {"confirmed": {}, "rejected": []}
 
-        # Process each poll option to find candidate appellatives and vote data
-        candidate_votes = {}
+        tweet_raw = extract_raw_mentions(tweet_text)
+        # Merge NED surface forms into tweet mentions
+        tweet_mentions: dict = {}
+        for cname in candidates:
+            key = cname.lower()
+            spans = list(tweet_raw.get(key, []))
+            if cname in tweet_ned.get("confirmed", {}):
+                spans.append(tweet_ned["confirmed"][cname])
+            
+            # Veto spans that overlap with DBpedia entities resolving to someone else
+            if not skip_ned and tweet_ned.get("rejected"):
+                rejected_list = tweet_ned["rejected"]
+                filtered_spans = []
+                for s in spans:
+                    s_lower = s.lower()
+                    is_rejected = any(r.lower() in s_lower or s_lower in r.lower() for r in rejected_list)
+                    if not is_rejected:
+                        filtered_spans.append(s)
+                spans = filtered_spans
+                
+            tweet_mentions[key] = spans
+
+        candidate_votes: dict = {}
+
         for option in options:
             option_text = option.get('label', '')
-            votes = option.get('votes', 0)
-            vote_percentage = (votes / total_votes) * 100 if total_votes > 0 else 0
+            votes       = option.get('votes', 0)
+            vote_pct    = (votes / total_votes) * 100 if total_votes > 0 else 0
 
-            option_appellatives = extract_appellatives_from_text(option_text)
-            normalized_candidate = smart_candidate_match(option_text, ecfg)
+            norm = smart_candidate_match(option_text, ecfg)
+            if norm not in candidates:
+                continue
 
-            if normalized_candidate in candidates:
-                if normalized_candidate not in candidate_votes:
-                    candidate_votes[normalized_candidate] = {
-                        'votes': votes,
-                        'percentage': vote_percentage
-                    }
-                else:
-                    candidate_votes[normalized_candidate]['votes'] += votes
-                    candidate_votes[normalized_candidate]['percentage'] += vote_percentage
+            if norm not in candidate_votes:
+                candidate_votes[norm] = {'votes': votes, 'percentage': vote_pct}
+            else:
+                candidate_votes[norm]['votes']      += votes
+                candidate_votes[norm]['percentage'] += vote_pct
 
-                appellative_text = None
-                candidate_lower = normalized_candidate.lower()
+            if poll_record[f'{norm}_text'] is not None:
+                continue
 
-                if candidate_lower in option_appellatives:
-                    appellative_text = option_appellatives[candidate_lower]
-                elif candidate_lower in tweet_appellatives:
-                    appellative_text = tweet_appellatives[candidate_lower]
+            # Step 1: mentions from option label
+            opt_raw = extract_raw_mentions(option_text)
 
-                if appellative_text and poll_record[f'{normalized_candidate}_text'] is None:
-                    poll_record[f'{normalized_candidate}_text'] = appellative_text
-                    poll_record[f'{normalized_candidate}_label'] = suggest_formality_label(appellative_text)
+            # NED on option label (if different from tweet text)
+            if not skip_ned and option_text and option_text != tweet_text:
+                if option_text not in ned_cache:
+                    ned_cache[option_text] = disambiguate_with_dbpedia(option_text)
+                opt_ned = ned_cache[option_text]
+            elif option_text == tweet_text:
+                opt_ned = tweet_ned
+            else:
+                opt_ned = {"confirmed": {}, "rejected": []}
 
-        for candidate, vote_data in candidate_votes.items():
-            poll_record[f'{candidate}_votes'] = vote_data['votes']
-            poll_record[f'{candidate}_percentage'] = vote_data['percentage']
+            key = norm.lower()
+            opt_spans = list(opt_raw.get(key, []))
+            
+            if norm in opt_ned.get("confirmed", {}):
+                opt_spans.append(opt_ned["confirmed"][norm])
+                
+            if not skip_ned and opt_ned.get("rejected"):
+                rejected_list = opt_ned["rejected"]
+                filtered_spans = []
+                for s in opt_spans:
+                    s_lower = s.lower()
+                    is_rejected = any(r.lower() in s_lower or s_lower in r.lower() for r in rejected_list)
+                    if not is_rejected:
+                        filtered_spans.append(s)
+                opt_spans = filtered_spans
+
+            all_spans: list = opt_spans + tweet_mentions.get(key, [])
+
+            # NED filter: when a confirmed surface form exists, filter loosely
+            if not skip_ned:
+                confirmed_surface = tweet_ned.get("confirmed", {}).get(norm, "") or opt_ned.get("confirmed", {}).get(norm, "")
+                if confirmed_surface:
+                    filtered = [
+                        s for s in all_spans
+                        if confirmed_surface.lower() in s.lower()
+                        or s.lower() in confirmed_surface.lower()
+                    ]
+                    if filtered:
+                        all_spans = filtered
+
+            if not all_spans:
+                continue
+
+            # Step 3: keep longest span (most informative)
+            best_span = max(all_spans, key=len)
+
+            # Step 4: classify
+            score, category = classify_formality_vandenberg(best_span, norm)
+            poll_record[f'{norm}_text']               = best_span
+            poll_record[f'{norm}_formality_score']    = score
+            poll_record[f'{norm}_formality_category'] = category
+
+        for cname, vd in candidate_votes.items():
+            poll_record[f'{cname}_votes']      = vd['votes']
+            poll_record[f'{cname}_percentage'] = vd['percentage']
 
         appellative_data.append(poll_record)
 
-    # Convert to DataFrame for export and analysis
+    # ── Export ────────────────────────────────────────────────────────────────
     result_df = pd.DataFrame(appellative_data)
-
     if result_df.empty:
         logger.warning("No appellative data found in any dataset!")
         return
 
-    # Export streamlined CSV for manual annotation workflow
     output_path = paths.processed_dir / "formal_informal_appellatives.csv"
     result_df.to_csv(output_path, index=False)
-
-    # Report extraction statistics
     logger.success(f"Formal vs informal appellatives saved to {output_path}")
-    logger.info(f"Generated {len(result_df)} poll records with appellatives")
+    logger.info(f"Generated {len(result_df)} poll records")
 
-    # Show coverage and initial formality distribution
+    category_order = ["TFNLN", "TLN", "FNLN", "LN", "FN", "PET_NAME", "ADJ_NAME"]
     for candidate in candidates:
         text_count = result_df[f'{candidate}_text'].notna().sum()
-        votes_count = result_df[f'{candidate}_votes'].notna().sum()
-        logger.info(f"Polls with {candidate} appellatives: {text_count}")
-        logger.info(f"Polls with {candidate} votes: {votes_count}")
-
+        logger.info(f"Polls with {candidate} mentions: {text_count}  |  votes: {result_df[f'{candidate}_votes'].notna().sum()}")
         if text_count > 0:
-            # Display automatic formality classification results
-            labels = result_df[f'{candidate}_label'].value_counts()
-            logger.info(f"{candidate} formality distribution: {dict(labels)}")
+            cat_col = f'{candidate}_formality_category'
+            if cat_col in result_df.columns:
+                dist    = result_df[cat_col].value_counts()
+                ordered = {cat: int(dist.get(cat, 0)) for cat in category_order}
+                logger.info(f"  {candidate} formality distribution: {ordered}")
+            score_col = f'{candidate}_formality_score'
+            if score_col in result_df.columns:
+                logger.info(f"  {candidate} mean formality score: {result_df[score_col].mean():.2f}/6")
 
     return result_df
 
@@ -753,15 +986,27 @@ def pearson_correlation(
             appellatives_df['poll_id'] = appellatives_df['poll_id'].astype(str)
             app_merge_cols = ['poll_id']
             for c in candidates:
-                if f'{c}_label' in appellatives_df.columns:
+                score_col = f'{c}_formality_score'
+                # Support both new (formality_score) and legacy (_label) column names
+                if score_col in appellatives_df.columns:
+                    app_merge_cols.append(score_col)
+                elif f'{c}_label' in appellatives_df.columns:
                     app_merge_cols.append(f'{c}_label')
             unified_df = unified_df.merge(appellatives_df[app_merge_cols],
                                           left_on='tweet_id', right_on='poll_id', how='left')
-            label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
             for c in candidates:
-                col = f'{c}_label'
-                if col in unified_df.columns:
-                    unified_df[f'{c.lower()}_formal_appellative'] = unified_df[col].map(label_map)
+                score_col = f'{c}_formality_score'
+                if score_col in unified_df.columns:
+                    # Normalize 0-6 scale to -1..+1: (score - 3) / 3
+                    unified_df[f'{c.lower()}_formal_appellative'] = (
+                        (unified_df[score_col].fillna(3.0) - 3.0) / 3.0
+                    )
+                elif f'{c}_label' in unified_df.columns:
+                    # Legacy fallback
+                    label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
+                    unified_df[f'{c.lower()}_formal_appellative'] = unified_df[f'{c}_label'].map(label_map)
+                else:
+                    unified_df[f'{c.lower()}_formal_appellative'] = np.nan
         else:
             for c in candidates:
                 unified_df[f'{c.lower()}_formal_appellative'] = np.nan
@@ -873,23 +1118,24 @@ def pearson_correlation(
 
     def compute_formality_bias(row):
         """
-        Compute formality bias based on formal appellative usage.
+        Compute formality bias as the normalized score difference.
+
+        Uses the van den Berg (2019) 7-level scale (0-6):
+        formality_bias = (pos_score - neg_score) / 6.0  →  range [-1, +1]
 
         Returns:
-            float: -1.0 (Favors negative candidate) to +1.0 (Favors positive candidate)
+            float: -1.0 (neg candidate more formal) to +1.0 (pos candidate more formal)
         """
-        pos_formal = row.get(pos_formal_col, 0)
-        neg_formal = row.get(neg_formal_col, 0)
+        pos_formal = row.get(pos_formal_col, np.nan)
+        neg_formal = row.get(neg_formal_col, np.nan)
 
-        if pd.isna(pos_formal):
-            pos_formal = 0
-        if pd.isna(neg_formal):
-            neg_formal = 0
-
-        pos_formal = int(pos_formal)
-        neg_formal = int(neg_formal)
-
-        return float(np.sign(pos_formal - neg_formal))
+        # pos_formal_col is already normalized to [-1,+1] via (score-3)/3
+        # Just take the difference and clip
+        if pd.isna(pos_formal) and pd.isna(neg_formal):
+            return np.nan
+        pos_v = float(pos_formal) if pd.notna(pos_formal) else 0.0
+        neg_v = float(neg_formal) if pd.notna(neg_formal) else 0.0
+        return float(np.clip(pos_v - neg_v, -1.0, 1.0))
 
     unified_df['formality_bias'] = unified_df.apply(compute_formality_bias, axis=1)
 
