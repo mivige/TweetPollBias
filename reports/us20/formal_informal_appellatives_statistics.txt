@@ -3,16 +3,23 @@
 Trump:
   Total polls: 7325
   Non-zero polls: 6927
-  Informal: 1671 polls, Mean: 55.7%, Median: 53.8%
-  Neutral: 4974 polls, Mean: 52.0%, Median: 50.0%
-  Formal: 282 polls, Mean: 81.4%, Median: 94.5%
+  ADJ_NAME: 2 polls, Mean: 39.5%, Median: 39.5%
+  PET_NAME: 4 polls, Mean: 24.9%, Median: 26.5%
+  FN: 22 polls, Mean: 54.8%, Median: 53.3%
+  LN: 4786 polls, Mean: 50.9%, Median: 50.0%
+  FNLN: 1660 polls, Mean: 55.7%, Median: 53.9%
+  TLN: 406 polls, Mean: 83.9%, Median: 93.0%
+  TFNLN: 47 polls, Mean: 75.6%, Median: 80.0%
   Overall: Mean: 54.1%, Median: 52.4%
 
 Biden:
   Total polls: 7325
   Non-zero polls: 6919
-  Informal: 1887 polls, Mean: 38.0%, Median: 34.8%
-  Neutral: 5002 polls, Mean: 44.3%, Median: 42.5%
-  Formal: 30 polls, Mean: 43.9%, Median: 46.4%
+  ADJ_NAME: 22 polls, Mean: 47.2%, Median: 50.0%
+  FN: 28 polls, Mean: 40.0%, Median: 29.2%
+  LN: 5226 polls, Mean: 43.9%, Median: 42.1%
+  FNLN: 1596 polls, Mean: 38.2%, Median: 35.5%
+  TLN: 32 polls, Mean: 47.4%, Median: 47.1%
+  TFNLN: 15 polls, Mean: 34.9%, Median: 40.2%
   Overall: Mean: 42.6%, Median: 40.7%
 
