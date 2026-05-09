@@ -1048,7 +1048,7 @@ def generate_mrp_dashboard(
                 # Filter to our analysis date range
                 predictit_df = predictit_df[
                     (predictit_df["date"] >= pd.Timestamp(min(rdf["date"])))
-                    & (predictit_df["date"] <= pd.Timestamp(end_date))
+                    & (predictit_df["date"] < pd.Timestamp(end_date)) # Strictly less than end_date to drop the final day, since results start to come out on election day and market closes after.
                 ]
 
                 logger.success(f"Processed {len(predictit_df)} PredictIt daily records for {positive_candidate} vs {negative_candidate}.")
