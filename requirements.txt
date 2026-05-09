@@ -9,6 +9,7 @@ pandas
 pip
 pytest
 python-dotenv
+requests
 ruff
 scikit-learn
 scipy
