@@ -78,8 +78,36 @@ _US20_CONFIG = {
         "candidate_B_oppose": "candidate_B_oppose_score",
     },
 
+    # ── Structured candidate naming metadata (formal_vs_informal command) ──
+    # Used by the van den Berg (2019) formality classifier and DBpedia Spotlight NED.
+    # Formality scale: TFNLN(6) > TLN(5) > FNLN(4) > LN(3) > FN(2) > PET_NAME(1) > ADJ_NAME(0)
+    "candidate_naming": {
+        "Trump": {
+            "first_name": "Donald",
+            "last_name": "Trump",
+            "middle": "J.",
+            "titles": ["President", "Former President", "Mr.", "Mr"],
+            "pet_names": ["Donnie", "Don", "The Donald"],
+            "derogatory_adjectives": ["Crooked", "Crazy", "Orange", "Lyin'", "Lyin"],
+            # DBpedia URI for NED disambiguation (filters false positives)
+            "dbpedia_uri": "http://dbpedia.org/resource/Donald_Trump",
+        },
+        "Biden": {
+            "first_name": "Joe",
+            "alt_first_names": ["Joseph R.", "Joseph R", "Joseph"],
+            "last_name": "Biden",
+            "middle": "",
+            "titles": ["President", "Vice President", "Former Vice President",
+                       "Mr.", "Mr", "Senator", "Sen."],
+            "pet_names": ["Joey"],
+            "derogatory_adjectives": ["Sleepy", "Creepy", "Dementia", "Corrupt",
+                                      "Basement"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Joe_Biden",
+        },
+    },
+
     # ── Appellative regex patterns (formal_vs_informal command) ───────────
-    # Used in extract_appellatives_from_text when spaCy NER misses a mention.
+    # Legacy fallback: used when spaCy NER misses a mention entirely.
     "appellative_patterns": {
         "trump": [
             r"\b(?:president\s+)?(?:donald\s+)?(?:j\.?\s+)?trump\b",
@@ -254,6 +282,28 @@ _US16_CONFIG = {
         "candidate_B_oppose": "candidate_B_oppose_score",
     },
 
+    "candidate_naming": {
+        "Trump": {
+            "first_name": "Donald",
+            "last_name": "Trump",
+            "middle": "J.",
+            "titles": ["President", "Former President", "Mr.", "Mr"],
+            "pet_names": ["Donnie", "Don", "The Donald"],
+            "derogatory_adjectives": ["Crooked", "Crazy", "Orange", "Lyin'", "Lyin"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Donald_Trump",
+        },
+        "Clinton": {
+            "first_name": "Hillary",
+            "last_name": "Clinton",
+            "middle": "Rodham",
+            "titles": ["Secretary", "Secretary of State", "Mrs.", "Mrs", "Senator",
+                       "Sen."],
+            "pet_names": ["Hill", "Hillary"],
+            "derogatory_adjectives": ["Crooked", "Killary", "Corrupt", "Lyin'", "Lyin"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Hillary_Clinton",
+        },
+    },
+
     "appellative_patterns": {
         "trump": [
             r"\b(?:president\s+)?(?:donald\s+)?(?:j\.?\s+)?trump\b",
@@ -420,6 +470,41 @@ _US24_CONFIG = {
         "candidate_B_support": "candidate_B_support_score",
         "candidate_A_oppose": "candidate_A_oppose_score",
         "candidate_B_oppose": "candidate_B_oppose_score",
+    },
+
+    "candidate_naming": {
+        "Trump": {
+            "first_name": "Donald",
+            "last_name": "Trump",
+            "middle": "J.",
+            "titles": ["President", "Former President", "Mr.", "Mr"],
+            "pet_names": ["Donnie", "Don", "The Donald"],
+            "derogatory_adjectives": ["Crooked", "Crazy", "Orange", "Lyin'", "Lyin"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Donald_Trump",
+        },
+        "Harris": {
+            "first_name": "Kamala",
+            "last_name": "Harris",
+            "middle": "Devi",
+            "titles": ["Vice President", "VP", "President", "Ms.", "Ms", "Senator",
+                       "Sen."],
+            "pet_names": ["Kamala"],
+            "derogatory_adjectives": ["Comrade", "Laughing", "Laffin", "Radical",
+                                      "Cackling"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Kamala_Harris",
+        },
+        "Biden": {
+            "first_name": "Joe",
+            "alt_first_names": ["Joseph R.", "Joseph R", "Joseph"],
+            "last_name": "Biden",
+            "middle": "",
+            "titles": ["President", "Vice President", "Former President",
+                       "Mr.", "Mr", "Senator", "Sen."],
+            "pet_names": ["Joey"],
+            "derogatory_adjectives": ["Sleepy", "Creepy", "Dementia", "Corrupt",
+                                      "Basement"],
+            "dbpedia_uri": "http://dbpedia.org/resource/Joe_Biden",
+        },
     },
 
     "appellative_patterns": {
