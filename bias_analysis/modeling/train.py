@@ -161,6 +161,26 @@ def fit_glm(df: pd.DataFrame):
     return result
 
 
+def fit_glm_baseline(df: pd.DataFrame):
+    """
+    Fit a baseline Binomial GLM predicting positive_share without bias markers.
+    """
+    formula = (
+        "positive_share ~ audience_mean_partisanship + author_partisanship"
+        " + author_gender_male"
+        " + author_age_30_39 + author_age_40_over"
+    )
+
+    model = smf.glm(
+        formula=formula,
+        data=df,
+        family=sm.families.Binomial(),
+        freq_weights=df["total_votes"].values.astype(float),
+    )
+    result = model.fit()
+    return result
+
+
 def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) -> pd.DataFrame:
     """
     Build a post-stratification frame crossing partisan × ideological strata.
@@ -276,6 +296,25 @@ def main(
         if cand in market:
             logger.info(f"    {cand} win probability: {market[cand] * 100:.0f}%")
     logger.info(f"    Note: {market.get('note', '')}")
+
+    baseline_glm_result = fit_glm_baseline(analysis_df)
+    
+    logger.info("=" * 70)
+    logger.info("MODEL COMPARISON")
+    logger.info("=" * 70)
+    logger.info("AIC (Akaike Information Criterion): Lower is better. Balances goodness-of-fit and complexity.")
+    logger.info(f"  Full GLM AIC:     {glm_result.aic:.2f}")
+    logger.info(f"  Baseline GLM AIC: {baseline_glm_result.aic:.2f}")
+    
+    logger.info("Log-Likelihood: Higher (closer to positive) is better. Measures how well the model explains the data.")
+    logger.info(f"  Full GLM Log-Likelihood:     {glm_result.llf:.2f}")
+    logger.info(f"  Baseline GLM Log-Likelihood: {baseline_glm_result.llf:.2f}")
+    
+    if glm_result.aic < baseline_glm_result.aic:
+        logger.info("-> Bias markers improved the GLM model (Lower AIC).")
+    else:
+        logger.info("-> Bias markers did NOT improve the GLM model (Higher or equal AIC).")
+
 
     logger.success("MRP pipeline completed successfully.")
 
