@@ -246,8 +246,30 @@ def appellatives(
     df = pd.read_csv(input_path)
     logger.info(f"Loaded {len(df)} poll records")
 
+    # Support both new formality_score columns and legacy _label columns
+    _score_col_exists = any(f'{c}_formality_score' in df.columns for c in candidates)
+    _label_col_exists = any(f'{c}_label' in df.columns for c in candidates)
+
+    if _score_col_exists:
+        formality_col_suffix  = '_formality_score'
+        use_score_mode        = True
+        # 7-level ordinal scale (van den Berg 2019 + extensions)
+        formality_order       = ['ADJ_NAME', 'PET_NAME', 'FN', 'LN', 'FNLN', 'TLN', 'TFNLN']
+        formality_score_map   = {cat: i for i, cat in enumerate(formality_order)}
+        formality_x_labels    = ['Adj+Name', 'Pet Name', 'First', 'Last',
+                                  'First+Last', 'Title+Last', 'Title+First+Last']
+    else:
+        formality_col_suffix  = '_label'
+        use_score_mode        = False
+        formality_order       = ['informal', 'neutral', 'formal']
+        formality_score_map   = {label: i for i, label in enumerate(formality_order)}
+        formality_x_labels    = [l.capitalize() for l in formality_order]
+
     # Filter to polls containing at least two candidates with formality data
-    candidate_cols = [f'{c}_label' for c in candidates if f'{c}_label' in df.columns]
+    if use_score_mode:
+        candidate_cols = [f'{c}_formality_score' for c in candidates if f'{c}_formality_score' in df.columns]
+    else:
+        candidate_cols = [f'{c}_label' for c in candidates if f'{c}_label' in df.columns]
     filter_mask = df[candidate_cols].notna().sum(axis=1) >= 2
     head_to_head = df[filter_mask].copy()
 
@@ -259,45 +281,43 @@ def appellatives(
 
     def improved_formality_scatter(df_candidate, title, ax, color):
         """
-        Create sophisticated scatter plot showing formality vs vote percentage.
-
-        Args:
-            df_candidate: DataFrame with candidate formality and percentage data
-            title: Plot title
-            ax: Matplotlib axis object
-            color: Scatter point color
-
-        Returns:
-            Modified axis object
+        Create scatter plot showing formality category vs vote percentage.
+        Works with both the new 7-level formality_score columns and the
+        legacy 3-level _label columns.
         """
-
-        # Standardize column names for consistent processing
         candidate_name = df_candidate['candidate'].iloc[0]
-        plot_df = df_candidate.rename(columns={
-            f'{candidate_name}_label': 'formality',
-            f'{candidate_name}_percentage': 'percentage'
-        }).copy()
 
-        # Remove zero-percentage polls to focus on competitive races
+        if use_score_mode:
+            # Map numeric score to category name for grouping
+            score_col = f'{candidate_name}_formality_score'
+            cat_col   = f'{candidate_name}_formality_category'
+            pct_col   = f'{candidate_name}_percentage'
+            # Build a 'formality' column from category if available, else infer from score
+            if cat_col in df_candidate.columns:
+                plot_df = df_candidate.rename(columns={cat_col: 'formality', pct_col: 'percentage'}).copy()
+            else:
+                # Reverse-map score to label
+                score_to_cat = {v: k for k, v in formality_score_map.items()}
+                plot_df = df_candidate.copy()
+                plot_df['formality'] = plot_df[score_col].map(score_to_cat)
+                plot_df = plot_df.rename(columns={pct_col: 'percentage'})
+        else:
+            plot_df = df_candidate.rename(columns={
+                f'{candidate_name}_label': 'formality',
+                f'{candidate_name}_percentage': 'percentage',
+            }).copy()
+
         plot_df_nonzero = plot_df[plot_df['percentage'] > 0].copy()
-
         if len(plot_df_nonzero) == 0:
             logger.warning(f"No non-zero data for {candidate_name}")
             return ax
 
-        # Map formality categories to numeric positions for plotting
-        formality_order = ['informal', 'neutral', 'formal']
-        formality_map = {label: i for i, label in enumerate(formality_order)}
-
-        # Filter to only existing formality categories
         available_formalities = [f for f in formality_order if f in plot_df_nonzero['formality'].values]
-
         if not available_formalities:
             logger.warning(f"No formality data available for {candidate_name}")
             return ax
 
-        # Convert formality labels to numeric positions
-        plot_df_nonzero['formality_numeric'] = plot_df_nonzero['formality'].map(formality_map)
+        plot_df_nonzero['formality_numeric'] = plot_df_nonzero['formality'].map(formality_score_map)
         plot_df_nonzero = plot_df_nonzero.dropna(subset=['formality_numeric'])
 
         # Add horizontal jitter to scatter points for better visibility
@@ -307,7 +327,6 @@ def appellatives(
 
         # Background violin plots
         try:
-            # Prepare data for violin plot with proper formality labels
             violin_data = plot_df_nonzero.copy()
             sns.violinplot(x='formality', y='percentage', data=violin_data,
                           order=available_formalities, inner=None, color='lightgray',
@@ -318,47 +337,37 @@ def appellatives(
         # Main scatter plot with candidate-specific colors
         ax.scatter(
             x_jittered, plot_df_nonzero['percentage'],
-            alpha=0.6, s=36, edgecolor='white', linewidth=0.4,
-            c=color,
-            zorder=3
+            alpha=0.6, s=36, edgecolor='white', linewidth=0.4, c=color, zorder=3
         )
 
         # Calculate formality-wise statistics for overlays
         grp = plot_df_nonzero.groupby('formality_numeric')['percentage']
         medians = grp.median()
-        means = grp.mean()
-        sems = grp.sem().fillna(0)  # Standard error of mean
+        means   = grp.mean()
+        sems    = grp.sem().fillna(0)
 
         x_positions = sorted(plot_df_nonzero['formality_numeric'].unique())
 
-        # Overlay mean values with error bars showing uncertainty
         if len(x_positions) > 0:
             ax.errorbar(x_positions, means.loc[x_positions], yerr=sems.loc[x_positions],
                        fmt='D', color='black', markersize=7, capsize=5,
                        label='Mean ± SEM', zorder=4)
-
-            # Overlay median markers (robust central tendency)
             for pos in x_positions:
                 if pos in medians.index:
                     ax.plot(pos, medians.loc[pos], marker='s', color='darkgreen',
                            markersize=8, zorder=4)
 
-        # Reference line: overall median
         overall_median = plot_df_nonzero['percentage'].median()
         ax.axhline(overall_median, color='gray', linestyle='--', linewidth=1, alpha=0.7)
 
-        # Axis labels
         ax.set_xlabel('Appellative Formality')
         ax.set_ylabel('Vote Percentage (%)')
         ax.set_title(title)
         ax.grid(True, alpha=0.3)
 
-        # Configure x-axis to show formality categories
         ax.set_xlim(-0.5, len(formality_order) - 0.5)
         ax.set_xticks(range(len(formality_order)))
-        ax.set_xticklabels([label.capitalize() for label in formality_order])
-
-        # Y-axis covers full percentage range with padding
+        ax.set_xticklabels(formality_x_labels, rotation=30, ha='right', fontsize=8)
         ax.set_ylim(-2, 102)
 
         return ax
@@ -374,11 +383,20 @@ def appellatives(
     plot_data = []
 
     for candidate in candidates:
-        candidate_data = head_to_head[[f'{candidate}_label', f'{candidate}_percentage']].dropna()
+        if use_score_mode:
+            cat_col   = f'{candidate}_formality_category'
+            score_col = f'{candidate}_formality_score'
+            pct_col   = f'{candidate}_percentage'
+            avail_cols = [c for c in [cat_col, score_col, pct_col] if c in head_to_head.columns]
+            candidate_data = head_to_head[avail_cols].dropna(subset=[pct_col])
+        else:
+            label_col = f'{candidate}_label'
+            pct_col   = f'{candidate}_percentage'
+            candidate_data = head_to_head[[label_col, pct_col]].dropna()
 
         if len(candidate_data) == 0:
             continue
-
+        candidate_data = candidate_data.copy()
         candidate_data['candidate'] = candidate
         plot_data.append(candidate_data)
 
@@ -423,14 +441,18 @@ def appellatives(
                 f.write(f"  Non-zero polls: {len(candidate_nonzero)}\n")
 
                 if len(candidate_nonzero) > 0:
-                    # Formality-specific performance metrics
-                    for formality in ['informal', 'neutral', 'formal']:
-                        formality_data = candidate_nonzero[candidate_nonzero[f'{candidate}_label'] == formality]
+                    # Category-specific performance metrics
+                    for formality in formality_order:
+                        cat_col = f'{candidate}_formality_category' if use_score_mode else f'{candidate}_label'
+                        if cat_col in candidate_nonzero.columns:
+                            formality_data = candidate_nonzero[candidate_nonzero[cat_col] == formality]
+                        else:
+                            formality_data = pd.DataFrame()
                         if len(formality_data) > 0:
-                            mean_perf = formality_data[f'{candidate}_percentage'].mean()
+                            mean_perf   = formality_data[f'{candidate}_percentage'].mean()
                             median_perf = formality_data[f'{candidate}_percentage'].median()
                             count = len(formality_data)
-                            f.write(f"  {formality.capitalize()}: {count} polls, Mean: {mean_perf:.1f}%, Median: {median_perf:.1f}%\n")
+                            f.write(f"  {formality}: {count} polls, Mean: {mean_perf:.1f}%, Median: {median_perf:.1f}%\n")
 
                     # Overall performance summary
                     overall_mean = candidate_nonzero[f'{candidate}_percentage'].mean()
@@ -780,15 +802,22 @@ def bias_relationship_scatter(
             appellatives_df['poll_id'] = appellatives_df['poll_id'].astype(str)
             app_merge_cols = ['poll_id']
             for c in candidates:
-                if f'{c}_label' in appellatives_df.columns:
+                score_col = f'{c}_formality_score'
+                if score_col in appellatives_df.columns:
+                    app_merge_cols.append(score_col)
+                elif f'{c}_label' in appellatives_df.columns:
                     app_merge_cols.append(f'{c}_label')
             unified_df = unified_df.merge(appellatives_df[app_merge_cols],
                                           left_on='tweet_id', right_on='poll_id', how='left')
-            label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
             for c in candidates:
-                col = f'{c}_label'
-                if col in unified_df.columns:
-                    unified_df[f'{c.lower()}_formal_appellative'] = unified_df[col].map(label_map)
+                score_col = f'{c}_formality_score'
+                if score_col in unified_df.columns:
+                    unified_df[f'{c.lower()}_formal_appellative'] = (
+                        (unified_df[score_col].fillna(3.0) - 3.0) / 3.0
+                    )
+                elif f'{c}_label' in unified_df.columns:
+                    label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
+                    unified_df[f'{c.lower()}_formal_appellative'] = unified_df[f'{c}_label'].map(label_map)
 
         leaning_score_cols = list(column_mapping.values())
 
@@ -842,12 +871,13 @@ def bias_relationship_scatter(
     neg_formal_col = f'{negative_candidate.lower()}_formal_appellative'
 
     def compute_formality_bias(row):
-        pos_f = row.get(pos_formal_col, 0)
-        neg_f = row.get(neg_formal_col, 0)
-        if pd.isna(pos_f): pos_f = 0
-        if pd.isna(neg_f): neg_f = 0
-        pos_f, neg_f = int(pos_f), int(neg_f)
-        return float(np.sign(pos_f - neg_f))
+        pos_f = row.get(pos_formal_col, np.nan)
+        neg_f = row.get(neg_formal_col, np.nan)
+        if pd.isna(pos_f) and pd.isna(neg_f):
+            return np.nan
+        pos_v = float(pos_f) if pd.notna(pos_f) else 0.0
+        neg_v = float(neg_f) if pd.notna(neg_f) else 0.0
+        return float(np.clip(pos_v - neg_v, -1.0, 1.0))
 
     unified_df['formality_bias'] = unified_df.apply(compute_formality_bias, axis=1)
 
