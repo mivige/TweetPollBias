@@ -415,7 +415,7 @@ _US24_CONFIG = {
     "code": "us24",
     "display_name": "2024 US Presidential Election",
 
-    "candidates": ["Trump", "Harris", "Biden"],
+    "candidates": ["Trump", "Harris"],
 
     "candidate_match_rules": {
         "Trump": [
@@ -425,10 +425,6 @@ _US24_CONFIG = {
         "Harris": [
             "Harris", "harris", "HARRIS", "Kamala Harris", "kamala harris",
             "Kamala", "kamala", "VP Harris", "Vice President Harris",
-        ],
-        "Biden": [
-            "Biden", "biden", "BIDEN", "Joe Biden", "joe biden",
-            "President Biden", "Joe", "joe",
         ],
     },
 
@@ -446,21 +442,15 @@ _US24_CONFIG = {
             r"\bkamala\b",
             r"\bvp\s+harris\b",
         ],
-        "Biden": [
-            r"\bbiden\b",
-            r"\bjoe\b.*\bbiden\b",
-            r"\bbiden\b.*\bjoe\b",
-            r"\bpresident\s+biden\b",
-        ],
     },
 
     "nli_hypotheses": {
         "positive_ideology": "The text supports conservative politics",
         "negative_ideology": "The text supports liberal politics",
         "candidate_A_support": "The text praises Donald Trump",
-        "candidate_B_support": "The text praises Kamala Harris or Joe Biden",
+        "candidate_B_support": "The text praises Kamala Harris",
         "candidate_A_oppose": "The text criticizes Donald Trump",
-        "candidate_B_oppose": "The text criticizes Kamala Harris or Joe Biden",
+        "candidate_B_oppose": "The text criticizes Kamala Harris",
     },
 
     "hypothesis_column_mapping": {
@@ -488,22 +478,10 @@ _US24_CONFIG = {
             "middle": "Devi",
             "titles": ["Vice President", "VP", "President", "Ms.", "Ms", "Senator",
                        "Sen."],
-            "pet_names": ["Kamala"],
+            "pet_names": ["Kam"],
             "derogatory_adjectives": ["Comrade", "Laughing", "Laffin", "Radical",
                                       "Cackling"],
             "dbpedia_uri": "http://dbpedia.org/resource/Kamala_Harris",
-        },
-        "Biden": {
-            "first_name": "Joe",
-            "alt_first_names": ["Joseph R.", "Joseph R", "Joseph"],
-            "last_name": "Biden",
-            "middle": "",
-            "titles": ["President", "Vice President", "Former President",
-                       "Mr.", "Mr", "Senator", "Sen."],
-            "pet_names": ["Joey"],
-            "derogatory_adjectives": ["Sleepy", "Creepy", "Dementia", "Corrupt",
-                                      "Basement"],
-            "dbpedia_uri": "http://dbpedia.org/resource/Joe_Biden",
         },
     },
 
@@ -522,13 +500,6 @@ _US24_CONFIG = {
             r"\b(?:comrade|laffin)\b.*?\b(?:kamala|harris)\b",
             r"\bkamala.*?\bharris\b",
         ],
-        "biden": [
-            r"\b(?:president\s+)?(?:joe\s+)?(?:joseph\s+)?biden\b",
-            r"\bbiden\b",
-            r"\b(?:mr\.?\s+)?biden\b",
-            r"\b(?:sleepy|creepy|basement|dementia)\s+(?:joe\s+)?biden\b",
-            r"\bbiden.*?\b(?:joe|joey|joseph)\b",
-        ],
     },
 
     "bias_direction": {
@@ -544,10 +515,10 @@ _US24_CONFIG = {
     "candidate_colors": {
         "Trump": "tab:red",
         "Harris": "tab:blue",
-        "Biden": "tab:cyan",
     },
 
     "election_date": "2024-11-05",
+    "start_date": "2024-07-21",
 
     "milestones": [
         ("2024-06-27", "First presidential debate (CNN)"),
@@ -593,32 +564,27 @@ _US24_CONFIG = {
     "raw_data_paths": {
         "polls": [
             "polls.jsonl",
-            "polls-biden.jsonl",
             "polls-harris.jsonl",
         ],
         "partisanship": [
-            "Inference/partisanship_scores.jsonl",
             "Inference/partisanship_scores.jsonl",
             "Inference/partisanship_scores.jsonl",
         ],
         "demographics": [
             "Inference/m3inf_output.jsonl",
             "Inference/m3inf_output.jsonl",
-            "Inference/m3inf_output.jsonl",
         ],
         "retweeters": [
-            "retweeters.jsonl",
             "retweeters.jsonl",
             "retweeters.jsonl",
         ],
         "favoriters": [
             "Inference/locations.jsonl",  # Placeholder if favoriters is not exactly matching, skipping file doesn't exist check isn't natively supported unless we spoof it. Assuming favouriters mapping isn't strictly mandatory or can be empty.
             "Inference/locations.jsonl",
-            "Inference/locations.jsonl",
         ],
     },
 
-    "data_source_names": ["general", "biden", "harris"],
+    "data_source_names": ["general", "harris"],
 
     "processed_subdir": "us24",
 }

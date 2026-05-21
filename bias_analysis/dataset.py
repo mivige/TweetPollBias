@@ -429,6 +429,16 @@ def get_base_dataset(
     if unified_df.empty:
         return unified_df
 
+    if "start_date" in ecfg:
+        start_date = pd.to_datetime(ecfg["start_date"], utc=True)
+        unified_df['created_at_dt'] = pd.to_datetime(unified_df['created_at'], errors='coerce', utc=True)
+        unified_df = unified_df[unified_df['created_at_dt'] >= start_date].copy()
+        unified_df.drop(columns=['created_at_dt'], inplace=True)
+        logger.info(f"Filtered to {len(unified_df)} polls created on or after {ecfg['start_date']}")
+        
+        if unified_df.empty:
+            return unified_df
+
     unified_df['tweet_id'] = unified_df['tweet_id'].astype(str)
     unified_df['author_id'] = unified_df['author_id'].astype(str)
 
