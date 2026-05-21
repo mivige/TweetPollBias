@@ -202,6 +202,45 @@ def fit_glm_baseline(df: pd.DataFrame):
     return result
 
 
+def fit_ols(df: pd.DataFrame):
+    """
+    Fit an Ordinary Least Squares (OLS) regression predicting positive_share.
+    Used as an interpretable standard reference model.
+    """
+    formula = (
+        "positive_share ~ audience_mean_partisanship + author_partisanship"
+        " + candidate_order + formality_bias + positive_ideology_score"
+        " + author_gender_male"
+        " + author_age_30_39 + author_age_40_over"
+    )
+
+    model = smf.ols(
+        formula=formula,
+        data=df,
+    )
+    result = model.fit()
+    return result
+
+
+def fit_ols_baseline(df: pd.DataFrame):
+    """
+    Fit a baseline Ordinary Least Squares (OLS) regression predicting positive_share without bias markers.
+    Used as an interpretable standard reference model.
+    """
+    formula = (
+        "positive_share ~ audience_mean_partisanship + author_partisanship"
+        " + author_gender_male"
+        " + author_age_30_39 + author_age_40_over"
+    )
+
+    model = smf.ols(
+        formula=formula,
+        data=df,
+    )
+    result = model.fit()
+    return result
+
+
 def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) -> pd.DataFrame:
     """
     Build a post-stratification frame crossing partisan × ideological strata.
@@ -336,6 +375,36 @@ def main(
     else:
         logger.info("-> Bias markers did NOT improve the GLM model (Higher or equal AIC).")
 
+    logger.info("")
+    logger.info("=" * 70)
+    logger.info("STANDARD OLS REFERENCE (Interpretability)")
+    logger.info("=" * 70)
+    ols_result = fit_ols(analysis_df)
+    ols_baseline_result = fit_ols_baseline(analysis_df)
+    logger.info("--- Full OLS Model Summary ---")
+    logger.info("\n" + str(ols_result.summary()))
+    logger.info("--- Baseline OLS Model Summary ---")
+    logger.info("\n" + str(ols_baseline_result.summary()))
+
+    logger.info("=" * 70)
+    logger.info("OLS MODEL COMPARISON")
+    logger.info("=" * 70)
+    logger.info("Adjusted R-squared: Higher is better. Measures variance explained, penalized for extra predictors.")
+    logger.info(f"  Full OLS Adj. R-squared:     {ols_result.rsquared_adj:.4f}")
+    logger.info(f"  Baseline OLS Adj. R-squared: {ols_baseline_result.rsquared_adj:.4f}")
+    
+    logger.info("AIC: Lower is better.")
+    logger.info(f"  Full OLS AIC:     {ols_result.aic:.2f}")
+    logger.info(f"  Baseline OLS AIC: {ols_baseline_result.aic:.2f}")
+
+    if ols_result.rsquared_adj > ols_baseline_result.rsquared_adj and ols_result.aic < ols_baseline_result.aic:
+        logger.info("-> Bias markers improved the OLS model (Higher Adj. R-squared and Lower AIC).")
+    elif ols_result.rsquared_adj > ols_baseline_result.rsquared_adj:
+        logger.info("-> Bias markers improved the OLS model's Adj. R-squared, but not AIC.")
+    elif ols_result.aic < ols_baseline_result.aic:
+        logger.info("-> Bias markers improved the OLS model's AIC, but not Adj. R-squared.")
+    else:
+        logger.info("-> Bias markers did NOT improve the OLS model.")
 
     logger.success("MRP pipeline completed successfully.")
 
