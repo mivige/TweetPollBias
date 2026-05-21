@@ -687,6 +687,20 @@ def formal_vs_informal(
         pets     = info.get("pet_names", [])
         derogs   = info.get("derogatory_adjectives", [])
 
+        # Clean span to handle hashtags and CamelCase (e.g. #DonaldTrump -> Donald Trump)
+        clean_span = span.replace('@', '').replace('#', '')
+        clean_span = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean_span)
+        
+        # Ensure all known words are spaced out for lowercase tags (e.g. hillaryclinton -> hillary clinton)
+        known_words = [first, last] + titles + pets + derogs + alt_first_names
+        known_words = sorted([w for w in known_words if w], key=len, reverse=True)
+        if known_words:
+            pattern_str = '|'.join(re.escape(w) for w in known_words)
+            pattern = re.compile(f'({pattern_str})', re.I)
+            clean_span = pattern.sub(r' \1 ', clean_span)
+        clean_span = ' '.join(clean_span.split())
+        span = clean_span # Override span for all subsequent VADER and regex checks
+
         def _any(words):
             return r'\b(?:' + '|'.join(re.escape(w) for w in words if w) + r')\b'
 
@@ -896,8 +910,12 @@ def formal_vs_informal(
             if not all_spans:
                 continue
 
-            # Step 3: keep longest span (most informative)
-            best_span = max(all_spans, key=len)
+            # Step 3: keep longest span (most informative), prioritizing non-tags
+            non_tag_spans = [s for s in all_spans if '@' not in s]
+            if non_tag_spans:
+                best_span = max(non_tag_spans, key=len)
+            else:
+                best_span = max(all_spans, key=len)
 
             # Step 4: classify
             score, category = classify_formality_vandenberg(best_span, norm)
