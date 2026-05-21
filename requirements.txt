@@ -23,3 +23,4 @@ transformers
 typer
 vaderSentiment
 -e .
+google-genai
