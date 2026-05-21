@@ -80,7 +80,7 @@ _US20_CONFIG = {
 
     # ── Structured candidate naming metadata (formal_vs_informal command) ──
     # Used by the van den Berg (2019) formality classifier and DBpedia Spotlight NED.
-    # Formality scale: TFNLN(6) > TLN(5) > FNLN(4) > LN(3) > FN(2) > PET_NAME(1) > ADJ_NAME(0)
+    # Formality scale: TFNLN(5) > TLN(4) > FNLN(3) > LN(2) > FN(1) > ADJ_PET_NAME(0)
     "candidate_naming": {
         "Trump": {
             "first_name": "Donald",

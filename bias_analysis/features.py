@@ -454,16 +454,15 @@ def formal_vs_informal(
       2. NED (DBpedia Spotlight)              -> filter false positives
       3. Deduplication                        -> keep longest span per candidate
       4. Formality classification (van den Berg 2019 + extensions):
-           6 TFNLN  Title+First+Last  ("President Donald Trump")
-           5 TLN    Title+Last        ("President Trump")
-           4 FNLN   First+Last        ("Donald Trump")
-           3 LN     Last only         ("Trump")
-           2 FN     First only        ("Donald")
-           1 PET_NAME Pet/nickname    ("Donnie", "Sleepy Joe")
-           0 ADJ_NAME Derog adj+name  ("Crooked Hillary")
+           5 TFNLN  Title+First+Last  ("President Donald Trump")
+           4 TLN    Title+Last        ("President Trump")
+           3 FNLN   First+Last        ("Donald Trump")
+           2 LN     Last only         ("Trump")
+           1 FN     First only        ("Donald")
+           0 ADJ_PET_NAME Neg adj/pet ("Crooked Hillary", "Sleepy Joe")
 
     Output CSV per candidate:
-      {C}_text, {C}_formality_score (0-6), {C}_formality_category,
+      {C}_text, {C}_formality_score (0-5), {C}_formality_category,
       {C}_votes, {C}_percentage
     """
     import time
@@ -492,6 +491,21 @@ def formal_vs_informal(
         return
     except OSError:
         logger.error("spaCy English model not found. Please download with: python -m spacy download en_core_web_sm")
+        return
+
+    try:
+        from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+        vader_analyzer = SentimentIntensityAnalyzer()
+        
+        # Inject known derogatory political adjectives into VADER lexicon
+        for cname in candidates:
+            c_info = candidate_naming_cfg.get(cname, {})
+            for derog in c_info.get("derogatory_adjectives", []):
+                vader_analyzer.lexicon[derog.lower()] = -2.0
+                
+        logger.info("Loaded VADER sentiment analyzer successfully with custom political lexicon")
+    except ImportError:
+        logger.error("vaderSentiment not installed. Please install with: pip install vaderSentiment")
         return
 
     # ── requests (optional, for NED) ─────────────────────────────────────────
@@ -581,8 +595,14 @@ def formal_vs_informal(
             if ent.label_ != "PERSON":
                 continue
             
-            # Smart context expansion: only include previous tokens if relevant
+            # Smart context expansion: include adjectival modifiers and relevant previous tokens
             start_idx = ent.start
+            
+            # Find adjectival modifiers that modify the entity's root
+            for child in ent.root.children:
+                if child.pos_ == "ADJ" and child.dep_ == "amod" and child.i < ent.start:
+                    start_idx = min(start_idx, child.i)
+
             while start_idx > 0 and start_idx >= ent.start - 3:
                 prev_token = doc[start_idx - 1].text.lower().strip('.')
                 if prev_token in _VALID_PRECEDING_WORDS:
@@ -651,8 +671,8 @@ def formal_vs_informal(
 
     # ── Formality classifier (Step 4) ─────────────────────────────────────────
     _FORMALITY_SCALE = {
-        "TFNLN": 6, "TLN": 5, "FNLN": 4, "LN": 3,
-        "FN": 2, "PET_NAME": 1, "ADJ_NAME": 0,
+        "TFNLN": 5, "TLN": 4, "FNLN": 3, "LN": 2,
+        "FN": 1, "ADJ_PET_NAME": 0,
     }
 
     def classify_formality_vandenberg(span: str, cname: str) -> tuple:
@@ -676,15 +696,30 @@ def formal_vs_informal(
             has_first = bool(re.search(_any(alt_first_names), span, re.I))
         has_title = bool(titles) and bool(re.search(_any(titles), span, re.I))
 
-        # ADJ_NAME: derogatory adjective present
-        if derogs and re.search(_any(derogs), span, re.I):
-            return (_FORMALITY_SCALE["ADJ_NAME"], "ADJ_NAME")
+        # ADJ_PET_NAME: negative valence adjective or pet name
+        sentiment = vader_analyzer.polarity_scores(span)
+        is_negative = sentiment['compound'] <= -0.05
 
-        # PET_NAME: recognised nickname/pet name
+        has_pet = False
         if pets:
             for pname in pets:
                 if re.search(r'\b' + re.escape(pname) + r'\b', span, re.I):
-                    return (_FORMALITY_SCALE["PET_NAME"], "PET_NAME")
+                    has_pet = True
+                    break
+
+        has_derog = bool(derogs) and bool(re.search(_any(derogs), span, re.I))
+
+        core_name = f"{first} {last}".strip()
+        core_sentiment = vader_analyzer.polarity_scores(core_name)
+        
+        if is_negative and sentiment['compound'] < core_sentiment['compound'] - 0.05:
+            return (_FORMALITY_SCALE["ADJ_PET_NAME"], "ADJ_PET_NAME")
+            
+        if (has_pet or has_derog) and is_negative:
+            return (_FORMALITY_SCALE["ADJ_PET_NAME"], "ADJ_PET_NAME")
+
+        if has_pet:
+            has_first = True
 
         if has_title and has_first and has_last:
             return (_FORMALITY_SCALE["TFNLN"], "TFNLN")
@@ -722,7 +757,7 @@ def formal_vs_informal(
 
     # Pre-compute spaCy docs using nlp.pipe
     logger.info(f"Batch processing {len(all_texts)} unique texts with spaCy...")
-    for text, doc in zip(all_texts, nlp.pipe(all_texts, disable=["tagger", "parser", "attribute_ruler", "lemmatizer"], batch_size=256)):
+    for text, doc in zip(all_texts, nlp.pipe(all_texts, disable=["attribute_ruler", "lemmatizer"], batch_size=256)):
         text_to_doc[text] = doc
 
     # Pre-compute NED using ThreadPoolExecutor
@@ -887,7 +922,7 @@ def formal_vs_informal(
     logger.success(f"Formal vs informal appellatives saved to {output_path}")
     logger.info(f"Generated {len(result_df)} poll records")
 
-    category_order = ["TFNLN", "TLN", "FNLN", "LN", "FN", "PET_NAME", "ADJ_NAME"]
+    category_order = ["TFNLN", "TLN", "FNLN", "LN", "FN", "ADJ_PET_NAME"]
     for candidate in candidates:
         text_count = result_df[f'{candidate}_text'].notna().sum()
         logger.info(f"Polls with {candidate} mentions: {text_count}  |  votes: {result_df[f'{candidate}_votes'].notna().sum()}")
@@ -899,7 +934,7 @@ def formal_vs_informal(
                 logger.info(f"  {candidate} formality distribution: {ordered}")
             score_col = f'{candidate}_formality_score'
             if score_col in result_df.columns:
-                logger.info(f"  {candidate} mean formality score: {result_df[score_col].mean():.2f}/6")
+                logger.info(f"  {candidate} mean formality score: {result_df[score_col].mean():.2f}/5")
 
     return result_df
 

@@ -253,10 +253,10 @@ def appellatives(
     if _score_col_exists:
         formality_col_suffix  = '_formality_score'
         use_score_mode        = True
-        # 7-level ordinal scale (van den Berg 2019 + extensions)
-        formality_order       = ['ADJ_NAME', 'PET_NAME', 'FN', 'LN', 'FNLN', 'TLN', 'TFNLN']
+        # 6-level ordinal scale (van den Berg 2019 + extensions)
+        formality_order       = ['ADJ_PET_NAME', 'FN', 'LN', 'FNLN', 'TLN', 'TFNLN']
         formality_score_map   = {cat: i for i, cat in enumerate(formality_order)}
-        formality_x_labels    = ['Adj+Name', 'Pet Name', 'First', 'Last',
+        formality_x_labels    = ['Neg Adj/Pet Name', 'First', 'Last',
                                   'First+Last', 'Title+Last', 'Title+First+Last']
     else:
         formality_col_suffix  = '_label'
