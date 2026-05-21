@@ -970,6 +970,7 @@ def generate_mrp_dashboard(
     from bias_analysis.modeling.train import (
         load_and_merge_features,
         fit_glm,
+        fit_glm_baseline,
         build_poststrat_frame,
         poststratify,
     )
@@ -993,7 +994,8 @@ def generate_mrp_dashboard(
 
     # Single global GLM fit
     glm_result = fit_glm(analysis_df)
-    logger.info("Global GLM fitted successfully.")
+    baseline_glm_result = fit_glm_baseline(analysis_df)
+    logger.info("Global GLMs fitted successfully.")
 
     # Parse dates
     analysis_df["date"] = pd.to_datetime(
@@ -1035,6 +1037,7 @@ def generate_mrp_dashboard(
             # Window-specific post-stratification
             ps_frame = build_poststrat_frame(window_df)
             mrp_share = poststratify(glm_result, ps_frame)
+            baseline_mrp_share = poststratify(baseline_glm_result, ps_frame)
 
             results.append({
                 "date": current.date(),
@@ -1042,6 +1045,8 @@ def generate_mrp_dashboard(
                 f"raw_{negative_candidate.lower()}": 1.0 - raw_share,
                 f"mrp_{positive_candidate.lower()}": mrp_share,
                 f"mrp_{negative_candidate.lower()}": 1.0 - mrp_share,
+                f"baseline_{positive_candidate.lower()}": baseline_mrp_share,
+                f"baseline_{negative_candidate.lower()}": 1.0 - baseline_mrp_share,
                 "n_polls": len(window_df),
             })
 
@@ -1141,6 +1146,29 @@ def generate_mrp_dashboard(
         hovertemplate=f"<b>{negative_candidate} Raw</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
+    pos_base_col = f"baseline_{positive_candidate.lower()}"
+    neg_base_col = f"baseline_{negative_candidate.lower()}"
+
+    # Baseline positive candidate
+    fig.add_trace(go.Scatter(
+        x=rdf["date"], y=rdf[pos_base_col] * 100,
+        mode="lines", name=f"Baseline MRP for {positive_candidate}",
+        line=dict(color=pos_hex, width=2, dash="dashdot"),
+        legendgroup="baseline",
+        hovertemplate=f"<b>{positive_candidate} Baseline</b>: %{{y:.1f}}%<extra></extra>",
+        visible=False,
+    ))
+
+    # Baseline negative candidate
+    fig.add_trace(go.Scatter(
+        x=rdf["date"], y=rdf[neg_base_col] * 100,
+        mode="lines", name=f"Baseline MRP for {negative_candidate}",
+        line=dict(color=neg_hex, width=2, dash="dashdot"),
+        legendgroup="baseline",
+        hovertemplate=f"<b>{negative_candidate} Baseline</b>: %{{y:.1f}}%<extra></extra>",
+        visible=False,
+    ))
+
     # PredictIt market time-series (dashdot)
     if predictit_df is not None and not predictit_df.empty:
         pos_mkt_col = f"market_{positive_candidate.lower()}"
@@ -1152,6 +1180,7 @@ def generate_mrp_dashboard(
             line=dict(color=pos_hex, width=1.5, dash="dash"),
             opacity=0.5,
             legendgroup="market",
+            visible="legendonly",
             hovertemplate=f"<b>{positive_candidate} Market</b>: %{{y:.1f}}%<extra></extra>",
         ))
 
@@ -1161,6 +1190,7 @@ def generate_mrp_dashboard(
             line=dict(color=neg_hex, width=1.5, dash="dash"),
             opacity=0.5,
             legendgroup="market",
+            visible="legendonly",
             hovertemplate=f"<b>{negative_candidate} Market</b>: %{{y:.1f}}%<extra></extra>",
         ))
 
@@ -1222,13 +1252,32 @@ def generate_mrp_dashboard(
         yaxis_title="Vote Share (%)",
         yaxis=dict(range=[0, 100], dtick=10),
         legend=dict(
-            orientation="h", yanchor="bottom", y=-0.25,
+            orientation="h", yanchor="top", y=-0.1,
             xanchor="center", x=0.5,
         ),
+        updatemenus=[
+            dict(
+                type="buttons",
+                direction="right",
+                active=0,
+                x=0.5,
+                y=-0.25,
+                xanchor="center",
+                yanchor="top",
+                buttons=list([
+                    dict(label="MRP vs Raw",
+                         method="restyle",
+                         args=[{"visible": [True, True, True, True, False, False]}, [0, 1, 2, 3, 4, 5]]),
+                    dict(label="MRP vs Baseline",
+                         method="restyle",
+                         args=[{"visible": [True, True, False, False, True, True]}, [0, 1, 2, 3, 4, 5]]),
+                ]),
+            )
+        ],
         hovermode="x unified",
         template="plotly_white",
-        height=600,
-        margin=dict(b=120),
+        height=650,
+        margin=dict(b=150, t=100),
     )
 
     # Save
