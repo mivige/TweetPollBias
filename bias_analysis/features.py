@@ -1050,9 +1050,10 @@ def pearson_correlation(
             for c in candidates:
                 score_col = f'{c}_formality_score'
                 if score_col in unified_df.columns:
-                    # Normalize 0-6 scale to -1..+1: (score - 3) / 3
+                    # Normalize 0-5 scale to -1..+1: (score - 2.5) / 2.5
+                    # Note: We do NOT fillna(2.5) here. Missing values stay NaN.
                     unified_df[f'{c.lower()}_formal_appellative'] = (
-                        (unified_df[score_col].fillna(3.0) - 3.0) / 3.0
+                        (unified_df[score_col] - 2.5) / 2.5
                     )
                 elif f'{c}_label' in unified_df.columns:
                     # Legacy fallback
