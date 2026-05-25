@@ -1743,5 +1743,96 @@ def pearson_correlation(
 
     return correlation_df
 
+@app.command()
+def sentiment_and_toxicity(
+    election: str = typer.Option("us20", help="Election code (e.g. 'us20')"),
+    batch_size: int = typer.Option(32, help="Batch size for Detoxify model prediction")
+):
+    """
+    Extract undirected sentiment (VADER) and toxicity (Detoxify) for each poll.
+    """
+    from bias_analysis.dataset import get_base_dataset
+    import ast
+    import torch
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    from detoxify import Detoxify
+    
+    paths = get_election_paths(election)
+    
+    logger.info(f"Loading polls for election [{election}]...")
+    df = get_base_dataset(election=election)
+    if df.empty:
+        logger.warning(f"No polls found for election {election}.")
+        return
+
+    logger.info("Initializing plain VADER SentimentIntensityAnalyzer...")
+    # Using plain VADER (no custom pet name lexicons)
+    vader = SentimentIntensityAnalyzer()
+
+    # The 'unbiased' model is preferred for political text because it is specifically 
+    # trained to reduce false positive toxicity flags when minority identities or 
+    # politically charged demographic terms are mentioned.
+    logger.info("Initializing Detoxify (unbiased model)...")
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logger.info(f"Detoxify device: {device}")
+    
+    detox = Detoxify('unbiased', device=device)
+
+    results = []
+    texts = []
+    
+    logger.info("Preparing text for analysis and calculating VADER sentiment...")
+    for idx, row in df.iterrows():
+        poll_id = str(row['tweet_id'])
+        tweet_text = str(row.get('tweet_text', ''))
+        
+        # Combine text and options to get the full semantic context of the poll
+        options_text = ""
+        try:
+            options_data = ast.literal_eval(str(row.get('poll_options', '[]')))
+            opts = [str(opt.get('label', '')) for opt in options_data]
+            if opts:
+                options_text = " | ".join(opts)
+        except Exception:
+            pass
+            
+        combined_text = f"{tweet_text} {options_text}".strip()
+        if not combined_text:
+            combined_text = " "
+            
+        texts.append(combined_text)
+        
+        # Calculate VADER per-poll undirected sentiment (compound score)
+        vs = vader.polarity_scores(combined_text)
+        results.append({
+            'poll_id': poll_id,
+            'undirected_sentiment': vs['compound'],
+            'toxicity_score': None  # Placeholder, will fill via batching
+        })
+
+    logger.info(f"Calculating toxicity for {len(texts)} polls in batches of {batch_size}...")
+    
+    # Process neural network toxicity in batches to leverage GPU if available
+    for i in tqdm(range(0, len(texts), batch_size), desc="Toxicity Extraction"):
+        batch_texts = texts[i : i + batch_size]
+        try:
+            preds = detox.predict(batch_texts)
+            tox_scores = preds['toxicity']
+            for j, score in enumerate(tox_scores):
+                results[i + j]['toxicity_score'] = float(score)
+        except Exception as e:
+            logger.error(f"Error processing toxicity batch {i} to {i+batch_size}: {e}")
+            for j in range(len(batch_texts)):
+                results[i + j]['toxicity_score'] = np.nan
+                
+    result_df = pd.DataFrame(results)
+    
+    output_path = paths.processed_dir / "sentiment_toxicity_features.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result_df.to_csv(output_path, index=False)
+    
+    logger.success(f"Successfully extracted sentiment and toxicity for {len(result_df)} polls!")
+    logger.info(f"Saved to: {output_path}")
+
 if __name__ == "__main__":
     app()
