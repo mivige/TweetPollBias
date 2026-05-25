@@ -311,8 +311,10 @@ def political_leaning(
 
                     # Extract entailment probability from BART-MNLI output logits
                     # BART-MNLI returns [contradiction, neutral, entailment] probabilities
-                    # Index 2 corresponds to entailment (text supports hypothesis)
-                    entailment_score = predictions[0][2].item()
+                    # To remove neutral noise, calculate: entailment / (entailment + contradiction)
+                    ent_prob = predictions[0][2].item()
+                    con_prob = predictions[0][0].item()
+                    entailment_score = ent_prob / (ent_prob + con_prob) if (ent_prob + con_prob) > 0 else 0.5
                     results[hypothesis] = entailment_score
 
             except Exception as e:
@@ -328,7 +330,7 @@ def political_leaning(
         logger.warning("Base dataset is empty. Cannot extract political leaning.")
         return
 
-    sample_df = base_df.head(max_samples) if max_samples is not None and len(base_df) > max_samples else base_df
+    sample_df = base_df.sample(n=max_samples, random_state=42) if max_samples is not None and len(base_df) > max_samples else base_df
     if max_samples is not None:
         logger.info(f"Processing political leaning for {len(sample_df)} polls (limited to {max_samples} samples)...")
     else:
@@ -689,7 +691,7 @@ def formal_vs_informal(
 
         # Clean span to handle hashtags and CamelCase (e.g. #DonaldTrump -> Donald Trump)
         clean_span = span.replace('@', '').replace('#', '')
-        clean_span = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean_span)
+        clean_span = re.sub(r'(?<!\bMc)(?<!\bMac)(?<!\bDe)([a-z])([A-Z])', r'\1 \2', clean_span)
         
         # Ensure all known words are spaced out for lowercase tags (e.g. hillaryclinton -> hillary clinton)
         known_words = [first, last] + titles + pets + derogs + alt_first_names
@@ -799,7 +801,9 @@ def formal_vs_informal(
         if not options:
             continue
 
-        total_votes = row['total_votes'] or 1
+        total_votes = row['total_votes']
+        if total_votes == 0:
+            continue
 
         poll_record = {
             'poll_id': str(row['tweet_id']),
@@ -1145,8 +1149,9 @@ def pearson_correlation(
                 positive_scores.append(row[col])
 
         if positive_scores:
-            # Average positive scores and add to bias
-            bias_components.append(np.mean(positive_scores))
+            # Average positive scores, map [0,1] probability to [-1, 1] and add to bias
+            mean_pos = np.mean(positive_scores)
+            bias_components.append((mean_pos - 0.5) * 2.0)
 
         # Negative-direction sentiment scores (pro negative candidate)
         negative_scores = []
@@ -1155,7 +1160,9 @@ def pearson_correlation(
                 negative_scores.append(row[col])
 
         if negative_scores:
-            bias_components.append(-np.mean(negative_scores))
+            # Average negative scores, map [0,1] probability to [-1, 1] and subtract from bias
+            mean_neg = np.mean(negative_scores)
+            bias_components.append(-((mean_neg - 0.5) * 2.0))
 
         # Average all components and clip to [-1, +1] range
         if bias_components:
@@ -1183,13 +1190,13 @@ def pearson_correlation(
         pos_formal = row.get(pos_formal_col, np.nan)
         neg_formal = row.get(neg_formal_col, np.nan)
 
-        # pos_formal_col is already normalized to [-1,+1] via (score-3)/3
-        # Just take the difference and clip
+        # pos_formal_col is already normalized to [-1,+1] via (score-2.5)/2.5
+        # The difference pos_v - neg_v ranges from [-2, 2]. Divide by 2 to map to [-1, 1].
         if pd.isna(pos_formal) and pd.isna(neg_formal):
             return np.nan
         pos_v = float(pos_formal) if pd.notna(pos_formal) else 0.0
         neg_v = float(neg_formal) if pd.notna(neg_formal) else 0.0
-        return float(np.clip(pos_v - neg_v, -1.0, 1.0))
+        return float((pos_v - neg_v) / 2.0)
 
     unified_df['formality_bias'] = unified_df.apply(compute_formality_bias, axis=1)
 
@@ -1822,9 +1829,16 @@ def sentiment_and_toxicity(
             for j, score in enumerate(tox_scores):
                 results[i + j]['toxicity_score'] = float(score)
         except Exception as e:
-            logger.error(f"Error processing toxicity batch {i} to {i+batch_size}: {e}")
-            for j in range(len(batch_texts)):
-                results[i + j]['toxicity_score'] = np.nan
+            logger.warning(f"Batch {i} failed (likely OOM). Falling back to sequential processing for this batch.")
+            for j, text in enumerate(batch_texts):
+                try:
+                    # Truncate string at ~2000 chars to avoid memory blowups on individual texts
+                    safe_text = text[:2000]
+                    pred = detox.predict(safe_text)
+                    results[i + j]['toxicity_score'] = float(pred['toxicity'])
+                except Exception as seq_e:
+                    logger.error(f"Error processing individual text {i+j}: {seq_e}")
+                    results[i + j]['toxicity_score'] = np.nan
                 
     result_df = pd.DataFrame(results)
     
