@@ -8,6 +8,7 @@ This module implements a frequentist MRP pipeline that:
 4. Benchmarks the adjusted estimate against the actual election result.
 """
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -116,6 +117,64 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         logger.warning(f"Missing {pl_path.name} — positive_ideology_score will be 0")
         df["positive_ideology_score"] = 0.0
 
+    st_path = paths.processed_dir / "sentiment_toxicity_features.csv"
+    if st_path.exists():
+        st_df = pd.read_csv(st_path)
+        st_df["poll_id"] = st_df["poll_id"].astype(str)
+        df = df.merge(
+            st_df[["poll_id", "undirected_sentiment", "toxicity_score"]],
+            left_on="tweet_id", right_on="poll_id", how="left",
+            suffixes=("", "_st"),
+        )
+    else:
+        logger.warning(f"Missing {st_path.name} — sentiment and toxicity will be 0")
+        df["undirected_sentiment"] = 0.0
+        df["toxicity_score"] = 0.0
+
+    cb_path = paths.processed_dir / "cognitive_biases.jsonl"
+    bias_columns = [
+        "bias_confirmation", "bias_anchoring", "bias_availability",
+        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics"
+    ]
+    if cb_path.exists():
+        bias_data = []
+        with open(cb_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                    poll_id = str(record.get("id", ""))
+                    biases = record.get("biases_detected", [])
+                    
+                    bias_dict = {"poll_id": poll_id}
+                    for b in bias_columns:
+                        bias_dict[b] = 0.0
+                        
+                    for b_info in biases:
+                        b_type = str(b_info.get("bias_type", "")).lower()
+                        if "confirmation" in b_type: bias_dict["bias_confirmation"] = 1.0
+                        elif "anchor" in b_type: bias_dict["bias_anchoring"] = 1.0
+                        elif "availab" in b_type: bias_dict["bias_availability"] = 1.0
+                        elif "social" in b_type: bias_dict["bias_social_desirability"] = 1.0
+                        elif "acquiescence" in b_type: bias_dict["bias_acquiescence"] = 1.0
+                        elif "demand" in b_type: bias_dict["bias_demand_characteristics"] = 1.0
+                        
+                    bias_data.append(bias_dict)
+                except Exception as e:
+                    pass
+        
+        cb_df = pd.DataFrame(bias_data)
+        if not cb_df.empty:
+            df = df.merge(cb_df, left_on="tweet_id", right_on="poll_id", how="left", suffixes=("", "_cb"))
+        else:
+            for b in bias_columns:
+                df[b] = 0.0
+    else:
+        logger.warning(f"Missing {cb_path.name} — cognitive biases will be 0")
+        for b in bias_columns:
+            df[b] = 0.0
+
     # --- Target: positive_share ---------------------------------------------
     df["positive_share"] = df[f"{cand_pos}_percentage"] / 100.0
 
@@ -142,7 +201,8 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         "positive_share", "audience_mean_partisanship", "author_partisanship",
         "candidate_order", "formality_bias", "positive_ideology_score", "total_votes",
         "author_gender_male", "author_age_30_39", "author_age_40_over",
-    ]
+        "undirected_sentiment", "toxicity_score"
+    ] + bias_columns
     for col in model_cols:
         if col in df.columns:
             df[col] = df[col].replace([np.inf, -np.inf], np.nan)
@@ -170,6 +230,9 @@ def fit_glm(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + undirected_sentiment + toxicity_score"
+        " + bias_confirmation + bias_anchoring + bias_availability"
+        " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -218,6 +281,9 @@ def fit_ols(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + undirected_sentiment + toxicity_score"
+        " + bias_confirmation + bias_anchoring + bias_availability"
+        " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -270,8 +336,18 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
             "cons": df["positive_ideology_score"].quantile(quantiles["cons_quantile"]),
         }
 
-    median_order = df["candidate_order"].median()
-    median_formality = df["formality_bias"].median()
+    # Zero-Bias Counterfactual: To isolate true population preference, we must project
+    # a perfectly neutral polling environment (0 toxicity, 0 bias, neutral order)
+    median_order = 0.0
+    median_formality = 0.0
+    median_sentiment = 0.0
+    median_toxicity = 0.0
+    
+    bias_columns = [
+        "bias_confirmation", "bias_anchoring", "bias_availability",
+        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics"
+    ]
+    bias_medians = {b: 0.0 for b in bias_columns}
 
     rows = []
     for p_name, p_weight in partisan_strata.items():
@@ -286,6 +362,9 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
                 "author_partisanship": profile["auth"],
                 "candidate_order": median_order,
                 "formality_bias": median_formality,
+                "undirected_sentiment": median_sentiment,
+                "toxicity_score": median_toxicity,
+                **bias_medians,
                 "positive_ideology_score": profile["cons"] * mult,
                 "author_gender_male": demo["gender_male"],
                 "author_age_30_39": demo["age_30_39"],
