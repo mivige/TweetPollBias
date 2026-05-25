@@ -813,7 +813,7 @@ def bias_relationship_scatter(
                 score_col = f'{c}_formality_score'
                 if score_col in unified_df.columns:
                     unified_df[f'{c.lower()}_formal_appellative'] = (
-                        (unified_df[score_col].fillna(3.0) - 3.0) / 3.0
+                        (unified_df[score_col] - 2.5) / 2.5
                     )
                 elif f'{c}_label' in unified_df.columns:
                     label_map = {'formal': 1.0, 'informal': -1.0, 'neutral': 0.0}
@@ -944,12 +944,12 @@ def bias_relationship_scatter(
         logger.success(f"Saved scatter plot to {output_path}")
 
 @app.command()
-def generate_mrp_dashboard(
+def generate_adjusted_dashboard(
     election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
 ):
     """
     Generate an interactive Plotly time-series dashboard showing rolling
-    MRP-adjusted Twitter poll estimates, raw Twitter means, PredictIt market
+    SCWG-adjusted Twitter poll estimates, raw Twitter means, PredictIt market
     prices, and actual results on a single unified chart.
 
     Saves output as an interactive HTML file in the election's reports directory.
@@ -975,7 +975,7 @@ def generate_mrp_dashboard(
         poststratify,
     )
 
-    logger.info(f"Loading data and fitting global GLM for MRP dashboard [{election}] …")
+    logger.info(f"Loading data and fitting global GLM for SCWG dashboard [{election}] …")
     base_df = get_base_dataset(election=election)
     if base_df.empty:
         logger.error("Base dataset is empty — aborting.")
@@ -1036,17 +1036,17 @@ def generate_mrp_dashboard(
 
             # Window-specific post-stratification
             ps_frame = build_poststrat_frame(window_df)
-            mrp_share = poststratify(glm_result, ps_frame)
-            baseline_mrp_share = poststratify(baseline_glm_result, ps_frame)
+            scwg_share = poststratify(glm_result, ps_frame)
+            baseline_scwg_share = poststratify(baseline_glm_result, ps_frame)
 
             results.append({
                 "date": current.date(),
                 f"raw_{positive_candidate.lower()}": raw_share,
                 f"raw_{negative_candidate.lower()}": 1.0 - raw_share,
-                f"mrp_{positive_candidate.lower()}": mrp_share,
-                f"mrp_{negative_candidate.lower()}": 1.0 - mrp_share,
-                f"baseline_{positive_candidate.lower()}": baseline_mrp_share,
-                f"baseline_{negative_candidate.lower()}": 1.0 - baseline_mrp_share,
+                f"scwg_{positive_candidate.lower()}": scwg_share,
+                f"scwg_{negative_candidate.lower()}": 1.0 - scwg_share,
+                f"baseline_{positive_candidate.lower()}": baseline_scwg_share,
+                f"baseline_{negative_candidate.lower()}": 1.0 - baseline_scwg_share,
                 "n_polls": len(window_df),
             })
 
@@ -1103,27 +1103,27 @@ def generate_mrp_dashboard(
     # Build Plotly figure
     fig = go.Figure()
 
-    pos_mrp_col = f"mrp_{positive_candidate.lower()}"
-    neg_mrp_col = f"mrp_{negative_candidate.lower()}"
+    pos_scwg_col = f"scwg_{positive_candidate.lower()}"
+    neg_scwg_col = f"scwg_{negative_candidate.lower()}"
     pos_raw_col = f"raw_{positive_candidate.lower()}"
     neg_raw_col = f"raw_{negative_candidate.lower()}"
 
-    # MRP positive candidate (solid)
+    # SCWG positive candidate (solid)
     fig.add_trace(go.Scatter(
-        x=rdf["date"], y=rdf[pos_mrp_col] * 100,
-        mode="lines", name=f"MRP Estimate for {positive_candidate}",
-        line=dict(color=pos_hex, width=2.5),
-        legendgroup="mrp",
-        hovertemplate=f"<b>{positive_candidate} MRP</b>: %{{y:.1f}}%<extra></extra>",
+        x=rdf["date"], y=rdf[pos_scwg_col] * 100,
+        mode="lines", name=f"SCWG Estimate for {positive_candidate}",
+        line=dict(color=pos_hex, width=3),
+        legendgroup="scwg",
+        hovertemplate=f"<b>{positive_candidate} SCWG</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
-    # MRP negative candidate (solid)
+    # SCWG negative candidate (solid)
     fig.add_trace(go.Scatter(
-        x=rdf["date"], y=rdf[neg_mrp_col] * 100,
-        mode="lines", name=f"MRP Estimate for {negative_candidate}",
-        line=dict(color=neg_hex, width=2.5),
-        legendgroup="mrp",
-        hovertemplate=f"<b>{negative_candidate} MRP</b>: %{{y:.1f}}%<extra></extra>",
+        x=rdf["date"], y=rdf[neg_scwg_col] * 100,
+        mode="lines", name=f"SCWG Estimate for {negative_candidate}",
+        line=dict(color=neg_hex, width=3),
+        legendgroup="scwg",
+        hovertemplate=f"<b>{negative_candidate} SCWG</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
     # Raw positive candidate (dashed)
@@ -1152,7 +1152,7 @@ def generate_mrp_dashboard(
     # Baseline positive candidate
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[pos_base_col] * 100,
-        mode="lines", name=f"Baseline MRP for {positive_candidate}",
+        mode="lines", name=f"Baseline SCWG for {positive_candidate}",
         line=dict(color=pos_hex, width=2, dash="dashdot"),
         legendgroup="baseline",
         hovertemplate=f"<b>{positive_candidate} Baseline</b>: %{{y:.1f}}%<extra></extra>",
@@ -1162,7 +1162,7 @@ def generate_mrp_dashboard(
     # Baseline negative candidate
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[neg_base_col] * 100,
-        mode="lines", name=f"Baseline MRP for {negative_candidate}",
+        mode="lines", name=f"Baseline SCWG for {negative_candidate}",
         line=dict(color=neg_hex, width=2, dash="dashdot"),
         legendgroup="baseline",
         hovertemplate=f"<b>{negative_candidate} Baseline</b>: %{{y:.1f}}%<extra></extra>",
@@ -1245,7 +1245,7 @@ def generate_mrp_dashboard(
 
     fig.update_layout(
         title=dict(
-            text=f"MRP-Adjusted Twitter Polls vs Benchmarks ({display_name})",
+            text=f"SCWG-Adjusted Twitter Polls vs Benchmarks ({display_name})",
             font=dict(size=20),
         ),
         xaxis_title="Date",
@@ -1265,10 +1265,10 @@ def generate_mrp_dashboard(
                 xanchor="center",
                 yanchor="top",
                 buttons=list([
-                    dict(label="MRP vs Raw",
+                    dict(label="SCWG vs Raw",
                          method="restyle",
                          args=[{"visible": [True, True, True, True, False, False]}, [0, 1, 2, 3, 4, 5]]),
-                    dict(label="MRP vs Baseline",
+                    dict(label="SCWG vs Baseline",
                          method="restyle",
                          args=[{"visible": [True, True, False, False, True, True]}, [0, 1, 2, 3, 4, 5]]),
                 ]),
@@ -1281,13 +1281,13 @@ def generate_mrp_dashboard(
     )
 
     # Save
-    output_path = paths.reports_dir / "mrp_bias_dashboard.html"
+    output_path = paths.reports_dir / "scwg_bias_dashboard.html"
     fig.write_html(str(output_path), include_plotlyjs=True)
     logger.success(f"Interactive dashboard saved to {output_path}")
 
     # Compute MAE vs actual result
-    mae_actual = (rdf[pos_mrp_col] - actual_pos_share).abs().mean() * 100
-    logger.info(f"MRP Estimate MAE vs Actual Result (across all days): {mae_actual:.2f} pp")
+    mae_actual = (rdf[pos_scwg_col] - actual_pos_share).abs().mean() * 100
+    logger.info(f"SCWG Estimate MAE vs Actual Result (across all days): {mae_actual:.2f} pp")
 
     # Compute additional metrics if PredictIt Market is available
     if predictit_df is not None and not predictit_df.empty:
@@ -1297,11 +1297,11 @@ def generate_mrp_dashboard(
         mae_mkt_actual = (predictit_df[mkt_col] - actual_pos_share).abs().mean() * 100
         logger.info(f"PredictIt Market MAE vs Actual Result (across all market days): {mae_mkt_actual:.2f} pp")
 
-        # 2. Divergence between MRP and Market
+        # 2. Divergence between SCWG and Market
         merged = rdf.merge(predictit_df[["date", mkt_col]], on="date", how="inner")
         if not merged.empty:
-            divergence = (merged[pos_mrp_col] - merged[mkt_col]).abs().mean() * 100
-            logger.info(f"Mean Divergence (MAE) between MRP and PredictIt: {divergence:.2f} pp")
+            divergence = (merged[pos_scwg_col] - merged[mkt_col]).abs().mean() * 100
+            logger.info(f"Mean Divergence (MAE) between SCWG and PredictIt: {divergence:.2f} pp")
 
     return rdf
 
@@ -1332,7 +1332,7 @@ def run_all(
     appellatives(election=election)
     leaning(election=election)
     bias_relationship_scatter(election=election)
-    generate_mrp_dashboard(election=election)
+    generate_adjusted_dashboard(election=election)
 
 if __name__ == "__main__":
     app()
