@@ -24,3 +24,4 @@ typer
 vaderSentiment
 -e .
 google-genai
+detoxify
