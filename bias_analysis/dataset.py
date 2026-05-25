@@ -299,8 +299,11 @@ def load_engagement_data(
 
     retweeter_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["retweeters"])
     favoriter_paths = _resolve_paths(raw_dir, ecfg["raw_data_paths"]["favoriters"])
+    favoriter_paths = [p for p in favoriter_paths if p.exists()]
+    
     _validate_paths(retweeter_paths, "retweeter engagement")
-    _validate_paths(favoriter_paths, "favoriter engagement")
+    if favoriter_paths:
+        _validate_paths(favoriter_paths, "favoriter engagement")
 
     logger.info("Loading engagement data (retweeters and favoriters)...")
 
@@ -376,16 +379,11 @@ def get_base_dataset(
     all_demographics_df = all_demographics_df.drop_duplicates(subset=['user_id'], keep='first')
 
     # Extract poll metadata
-    all_polls = []
-    seen_poll_ids = set()
+    all_polls_dict = {}
 
     for polls_df, source_name in zip(poll_dfs, source_names):
         for _, row in polls_df.iterrows():
             poll_id = str(row.get('id', ''))
-
-            if poll_id in seen_poll_ids:
-                continue
-            seen_poll_ids.add(poll_id)
 
             if not isinstance(row.get('entities'), dict):
                 continue
@@ -401,6 +399,10 @@ def get_base_dataset(
             total_votes = sum(option.get('votes', 0) for option in options)
             if total_votes == 0:
                 continue
+
+            if poll_id in all_polls_dict:
+                if total_votes <= all_polls_dict[poll_id]['total_votes']:
+                    continue
 
             poll_record = {
                 'tweet_id': poll_id,
@@ -421,9 +423,9 @@ def get_base_dataset(
                 poll_options.append({'position': position, 'label': option_text, 'votes': votes})
 
             poll_record['poll_options'] = str(poll_options)
-            all_polls.append(poll_record)
+            all_polls_dict[poll_id] = poll_record
 
-    unified_df = pd.DataFrame(all_polls)
+    unified_df = pd.DataFrame(list(all_polls_dict.values()))
     logger.info(f"Extracted {len(unified_df)} valid polls >0 votes")
 
     if unified_df.empty:
@@ -448,14 +450,7 @@ def get_base_dataset(
         left_on='author_id', right_on='user_id', how='left'
     )
 
-    partisanship_raw = unified_df['author_partisanship_raw']
-    partisanship_mean = partisanship_raw.mean()
-    partisanship_std = partisanship_raw.std()
-
-    if pd.notna(partisanship_mean) and pd.notna(partisanship_std) and partisanship_std > 0:
-        unified_df['author_partisanship'] = (partisanship_raw - partisanship_mean) / partisanship_std
-    else:
-        unified_df['author_partisanship'] = partisanship_raw
+    unified_df['author_partisanship'] = unified_df['author_partisanship_raw']
 
     unified_df = unified_df.merge(
         all_demographics_df[[
@@ -493,10 +488,10 @@ def get_base_dataset(
                     if isinstance(user_obj, dict):
                         user_id = str(user_obj.get('id', ''))
                         if user_id and user_id not in audience_engagement[tweet_id]['users']:
+                            audience_engagement[tweet_id]['users'].add(user_id)
                             if user_id in partisanship_dict:
                                 score = partisanship_dict[user_id]
                                 if pd.notna(score):
-                                    audience_engagement[tweet_id]['users'].add(user_id)
                                     audience_engagement[tweet_id]['partisanship_scores'].append(score)
 
     logger.info("Processing retweeters...")
@@ -513,7 +508,7 @@ def get_base_dataset(
             'tweet_id': tweet_id,
                 'audience_mean_partisanship': np.mean(scores),
                 'audience_median_partisanship': np.median(scores),
-                'audience_n_distinct_users': len(scores)
+                'audience_n_distinct_users': len(audience_engagement.get(tweet_id, {}).get('users', set()))
             })
         else:
             audience_stats.append({
