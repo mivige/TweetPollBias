@@ -351,8 +351,8 @@ _US16_CONFIG = {
 
     "mrp": {
         "actual_results": {
-            "Trump": 0.568,
-            "Clinton": 0.432,
+            "Trump": 0.489,
+            "Clinton": 0.511,
         },
         "partisan_strata": {"Republican": 0.33, "Democrat": 0.36, "Independent": 0.31},
         "ideological_strata": {"Conservative": 0.35, "Moderate": 0.39, "Liberal": 0.26},
