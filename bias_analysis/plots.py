@@ -91,6 +91,7 @@ def candidate_order(
 
         # Add horizontal jitter
         x_base = plot_df_nonzero['position'].values.astype(float)
+        np.random.seed(42)  # Ensure jitter is reproducible
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
 
@@ -322,6 +323,7 @@ def appellatives(
 
         # Add horizontal jitter to scatter points for better visibility
         x_base = plot_df_nonzero['formality_numeric'].values.astype(float)
+        np.random.seed(42)  # Ensure jitter is reproducible
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
 
@@ -608,6 +610,7 @@ def leaning(
 
         # Add horizontal jitter to scatter points for better visibility
         x_base = plot_df_nonzero['leaning_numeric'].values.astype(float)
+        np.random.seed(42)  # Ensure jitter is reproducible
         jitter = np.random.normal(loc=0, scale=0.08, size=len(plot_df_nonzero))
         x_jittered = x_base + jitter
 
