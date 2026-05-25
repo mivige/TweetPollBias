@@ -137,8 +137,7 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         else:
             df[col] = 0.5
 
-    df["positive_share"] = df["positive_share"].fillna(df["positive_share"].median())
-
+    # Rows with missing positive_share will be dropped later.
     model_cols = [
         "positive_share", "audience_mean_partisanship", "author_partisanship",
         "candidate_order", "formality_bias", "positive_ideology_score", "total_votes",
@@ -146,7 +145,10 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
     ]
     for col in model_cols:
         if col in df.columns:
-            df[col] = df[col].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+            # Impute predictors with 0.0 (no bias) if missing
+            if col != "positive_share":
+                df[col] = df[col].fillna(0.0)
 
     df["positive_share"] = df["positive_share"].clip(0.0, 1.0)
     df["total_votes"] = df["total_votes"].clip(lower=1)
