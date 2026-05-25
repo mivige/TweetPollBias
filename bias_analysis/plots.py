@@ -1325,6 +1325,55 @@ def _mpl_color_to_hex(color_str: str) -> str:
 
 
 @app.command()
+def llm_features(
+    election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
+):
+    """
+    Generate visualizations for LLM cognitive biases.
+    """
+    import json
+    ecfg = get_election_config(election)
+    paths = get_election_paths(election)
+    
+    cb_path = paths.processed_dir / "cognitive_biases.jsonl"
+    if not cb_path.exists():
+        logger.warning(f"Missing {cb_path} - run llm_bias_extraction first")
+        return
+        
+    bias_counts = {}
+    with open(cb_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip(): continue
+            try:
+                record = json.loads(line)
+                for b_info in record.get("biases_detected", []):
+                    b_type = str(b_info.get("bias_type", "")).strip()
+                    if b_type and b_type.lower() != "none":
+                        bias_counts[b_type] = bias_counts.get(b_type, 0) + 1
+            except Exception:
+                pass
+                
+    if not bias_counts:
+        logger.warning("No valid cognitive biases found to plot.")
+        return
+        
+    df_counts = pd.DataFrame(list(bias_counts.items()), columns=["Bias Type", "Frequency"])
+    df_counts = df_counts.sort_values("Frequency", ascending=False)
+    
+    plt.figure(figsize=(10, 6))
+    # Provide hue and legend=False to avoid FutureWarnings in newer seaborn
+    sns.barplot(data=df_counts, x="Frequency", y="Bias Type", hue="Bias Type", palette="viridis", legend=False)
+    plt.title(f"Most Frequent Cognitive Biases ({election.upper()})")
+    plt.tight_layout()
+    
+    paths.figures_dir.mkdir(parents=True, exist_ok=True)
+    out_path = paths.figures_dir / "cognitive_biases_freq.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    logger.success(f"Saved cognitive biases plot to {out_path}")
+
+
+@app.command()
 def run_all(
     election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
 ):
@@ -1335,6 +1384,7 @@ def run_all(
     appellatives(election=election)
     leaning(election=election)
     bias_relationship_scatter(election=election)
+    llm_features(election=election)
     generate_adjusted_dashboard(election=election)
 
 if __name__ == "__main__":
