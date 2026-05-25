@@ -113,15 +113,15 @@ _US20_CONFIG = {
             r"\b(?:president\s+)?(?:donald\s+)?(?:j\.?\s+)?trump\b",
             r"\btrump\b",
             r"\b(?:mr\.?\s+)?trump\b",
-            r"\b(?:sleepy|crooked|crazy|orange|donnie)\b.*?\btrump\b",
-            r"\btrump.*?\b(?:donald|don|donnie)\b",
+            r"\b(?:sleepy|crooked|crazy|orange|donnie)\b(?:\s+\w+){0,3}\s*\btrump\b",
+            r"\btrump(?:\s+\w+){0,3}\s*\b(?:donald|don|donnie)\b",
         ],
         "biden": [
             r"\b(?:president\s+)?(?:joe\s+)?(?:joseph\s+)?biden\b",
             r"\bbiden\b",
             r"\b(?:mr\.?\s+)?biden\b",
             r"\b(?:sleepy|creepy|basement|dementia)\s+(?:joe\s+)?biden\b",
-            r"\bbiden.*?\b(?:joe|joey|joseph)\b",
+            r"\bbiden(?:\s+\w+){0,3}\s*\b(?:joe|joey|joseph)\b",
         ],
     },
 
@@ -309,15 +309,15 @@ _US16_CONFIG = {
             r"\b(?:president\s+)?(?:donald\s+)?(?:j\.?\s+)?trump\b",
             r"\btrump\b",
             r"\b(?:mr\.?\s+)?trump\b",
-            r"\b(?:crooked|crazy|orange|donnie)\b.*?\btrump\b",
-            r"\btrump.*?\b(?:donald|don|donnie)\b",
+            r"\b(?:crooked|crazy|orange|donnie)\b(?:\s+\w+){0,3}\s*\btrump\b",
+            r"\btrump(?:\s+\w+){0,3}\s*\b(?:donald|don|donnie)\b",
         ],
         "clinton": [
             r"\b(?:secretary\s+)?(?:hillary\s+)?(?:rodham\s+)?clinton\b",
             r"\bclinton\b",
             r"\b(?:mrs\.?\s+)?clinton\b",
-            r"\b(?:crooked|killary)\b.*?\b(?:hillary|clinton)\b",
-            r"\bclinton.*?\b(?:hillary)\b",
+            r"\b(?:crooked|killary)\b(?:\s+\w+){0,3}\s*\b(?:hillary|clinton)\b",
+            r"\bclinton(?:\s+\w+){0,3}\s*\b(?:hillary)\b",
         ],
     },
 
@@ -490,15 +490,15 @@ _US24_CONFIG = {
             r"\b(?:president\s+)?(?:donald\s+)?(?:j\.?\s+)?trump\b",
             r"\btrump\b",
             r"\b(?:mr\.?\s+)?trump\b",
-            r"\b(?:crooked|crazy|orange|donnie)\b.*?\btrump\b",
-            r"\btrump.*?\b(?:donald|don|donnie)\b",
+            r"\b(?:crooked|crazy|orange|donnie)\b(?:\s+\w+){0,3}\s*\btrump\b",
+            r"\btrump(?:\s+\w+){0,3}\s*\b(?:donald|don|donnie)\b",
         ],
         "harris": [
             r"\b(?:vice\s+president\s+)?(?:kamala\s+)?harris\b",
             r"\bharris\b",
             r"\b(?:vp\s+)?harris\b",
-            r"\b(?:comrade|laffin)\b.*?\b(?:kamala|harris)\b",
-            r"\bkamala.*?\bharris\b",
+            r"\b(?:comrade|laffin)\b(?:\s+\w+){0,3}\s*\b(?:kamala|harris)\b",
+            r"\bkamala(?:\s+\w+){0,3}\s*\bharris\b",
         ],
     },
 
@@ -579,8 +579,6 @@ _US24_CONFIG = {
             "retweeters.jsonl",
         ],
         "favoriters": [
-            "Inference/locations.jsonl",  # Placeholder if favoriters is not exactly matching, skipping file doesn't exist check isn't natively supported unless we spoof it. Assuming favouriters mapping isn't strictly mandatory or can be empty.
-            "Inference/locations.jsonl",
         ],
     },
 
