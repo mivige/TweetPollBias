@@ -174,16 +174,15 @@ def fit_glm(df: pd.DataFrame):
         " + author_age_30_39 + author_age_40_over"
     )
 
-    # Scale weights so they sum to the number of polls (N) rather than total votes
-    # This prevents the GLM from inflating degrees of freedom and artificially shrinking p-values.
+    # For Binomial proportions, pass the number of trials as var_weights
+    # This properly scales the variance (larger polls have tighter variance)
     raw_weights = df["total_votes"].values.astype(float)
-    scaled_weights = raw_weights * (len(df) / raw_weights.sum())
 
     model = smf.glm(
         formula=formula,
         data=df,
         family=sm.families.Binomial(),
-        freq_weights=scaled_weights,
+        var_weights=raw_weights,
     )
     result = model.fit()
     return result
@@ -200,13 +199,12 @@ def fit_glm_baseline(df: pd.DataFrame):
     )
 
     raw_weights = df["total_votes"].values.astype(float)
-    scaled_weights = raw_weights * (len(df) / raw_weights.sum())
 
     model = smf.glm(
         formula=formula,
         data=df,
         family=sm.families.Binomial(),
-        freq_weights=scaled_weights,
+        var_weights=raw_weights,
     )
     result = model.fit()
     return result
