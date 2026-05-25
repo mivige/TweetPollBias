@@ -66,7 +66,8 @@ def process_single_batch(client: genai.Client, batch: list, outfile):
         
         if len(results) != len(batch):
             logger.warning(f"Attention: llm has returned {len(results)} items instead of {len(batch)}.")
-            
+            return False
+
         for result in results:
             outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
         outfile.flush()
@@ -86,7 +87,8 @@ def process_single_batch(client: genai.Client, batch: list, outfile):
             
             if len(results) != len(batch):
                 logger.warning(f"Attention: llm has returned {len(results)} items instead of {len(batch)}.")
-                
+                return False
+
             for result in results:
                 outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
             outfile.flush()
@@ -170,7 +172,7 @@ def extract_biases(
                 batch = []
                 
                 # Sleep to strictly respect limits
-                time.sleep(6)
+                time.sleep(4)
                 
         # Process remaining
         if batch:
