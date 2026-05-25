@@ -354,7 +354,7 @@ def political_leaning(
 
         total_votes = row['total_votes']
         if total_votes == 0:
-            total_votes = 1  # Prevent division by zero
+            continue  # Drop empty polls
 
         # Initialize poll record with essential metadata
         poll_record = {
