@@ -1,26 +1,22 @@
 === Formal vs Informal Appellatives Analysis - Summary Statistics ===
 
 Trump:
-  Total polls: 4804
-  Non-zero polls: 4779
-  Informal: 2049 polls, Mean: 61.9%, Median: 66.7%
-  Neutral: 2690 polls, Mean: 63.2%, Median: 69.3%
-  Formal: 40 polls, Mean: 83.9%, Median: 88.3%
-  Overall: Mean: 62.8%, Median: 68.7%
+  Total polls: 2469
+  Non-zero polls: 2458
+  FN: 37 polls, Mean: 80.2%, Median: 96.5%
+  LN: 1146 polls, Mean: 67.3%, Median: 72.4%
+  FNLN: 1258 polls, Mean: 66.0%, Median: 71.9%
+  TLN: 13 polls, Mean: 86.8%, Median: 87.9%
+  TFNLN: 4 polls, Mean: 86.1%, Median: 88.6%
+  Overall: Mean: 66.9%, Median: 72.4%
 
 Harris:
-  Total polls: 2532
-  Non-zero polls: 2420
-  Informal: 11 polls, Mean: 32.0%, Median: 30.3%
-  Neutral: 2403 polls, Mean: 26.0%, Median: 18.8%
-  Formal: 6 polls, Mean: 12.4%, Median: 9.6%
-  Overall: Mean: 26.0%, Median: 18.8%
-
-Biden:
-  Total polls: 2298
-  Non-zero polls: 2208
-  Informal: 718 polls, Mean: 23.4%, Median: 15.2%
-  Neutral: 1459 polls, Mean: 23.0%, Median: 14.1%
-  Formal: 31 polls, Mean: 41.8%, Median: 18.0%
-  Overall: Mean: 23.4%, Median: 14.3%
+  Total polls: 2469
+  Non-zero polls: 2365
+  FN: 36 polls, Mean: 26.7%, Median: 24.5%
+  LN: 1019 polls, Mean: 26.0%, Median: 18.2%
+  FNLN: 1291 polls, Mean: 26.8%, Median: 20.8%
+  TLN: 8 polls, Mean: 15.6%, Median: 9.6%
+  TFNLN: 11 polls, Mean: 33.5%, Median: 26.6%
+  Overall: Mean: 26.4%, Median: 19.6%
 

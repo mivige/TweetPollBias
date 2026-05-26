@@ -1,31 +1,23 @@
 === Political Leaning Analysis - Summary Statistics ===
 
 Political Leaning Distribution:
-  neutral: 4784 polls (95.0%)
-  pro-harris: 227 polls (4.5%)
-  pro-trump: 27 polls (0.5%)
+  neutral: 1649 polls (61.7%)
+  pro-harris: 935 polls (35.0%)
+  pro-trump: 87 polls (3.3%)
 
 Trump:
-  Total polls: 5038
-  Non-zero polls: 5013
-  Pro Trump: 27 polls, Mean: 62.9%, Median: 66.7%
-  Neutral: 4759 polls, Mean: 62.9%, Median: 69.1%
-  Pro Harris: 227 polls, Mean: 66.9%, Median: 69.1%
-  Overall: Mean: 63.1%, Median: 69.1%
+  Total polls: 2671
+  Non-zero polls: 2660
+  Pro Trump: 87 polls, Mean: 66.4%, Median: 70.2%
+  Neutral: 1641 polls, Mean: 67.0%, Median: 73.4%
+  Pro Harris: 932 polls, Mean: 67.4%, Median: 72.1%
+  Overall: Mean: 67.1%, Median: 72.7%
 
 Harris:
-  Total polls: 2767
-  Non-zero polls: 2642
-  Pro Trump: 14 polls, Mean: 20.0%, Median: 17.0%
-  Neutral: 2462 polls, Mean: 25.8%, Median: 18.2%
-  Pro Harris: 166 polls, Mean: 27.1%, Median: 25.9%
-  Overall: Mean: 25.8%, Median: 18.6%
-
-Biden:
-  Total polls: 2302
-  Non-zero polls: 2211
-  Pro Trump: 13 polls, Mean: 26.6%, Median: 21.2%
-  Neutral: 2140 polls, Mean: 23.2%, Median: 14.3%
-  Pro Harris: 58 polls, Mean: 27.9%, Median: 21.5%
-  Overall: Mean: 23.4%, Median: 14.3%
+  Total polls: 2671
+  Non-zero polls: 2554
+  Pro Trump: 82 polls, Mean: 30.1%, Median: 24.5%
+  Neutral: 1583 polls, Mean: 26.3%, Median: 19.0%
+  Pro Harris: 889 polls, Mean: 25.8%, Median: 19.0%
+  Overall: Mean: 26.2%, Median: 19.2%
 
