@@ -3,23 +3,22 @@
 Trump:
   Total polls: 7325
   Non-zero polls: 6927
-  ADJ_NAME: 2 polls, Mean: 39.5%, Median: 39.5%
-  PET_NAME: 4 polls, Mean: 24.9%, Median: 26.5%
-  FN: 22 polls, Mean: 54.8%, Median: 53.3%
-  LN: 4786 polls, Mean: 50.9%, Median: 50.0%
-  FNLN: 1660 polls, Mean: 55.7%, Median: 53.9%
-  TLN: 406 polls, Mean: 83.9%, Median: 93.0%
-  TFNLN: 47 polls, Mean: 75.6%, Median: 80.0%
+  ADJ_PET_NAME: 7 polls, Mean: 50.5%, Median: 47.7%
+  FN: 27 polls, Mean: 55.5%, Median: 56.7%
+  LN: 4766 polls, Mean: 50.8%, Median: 50.0%
+  FNLN: 1680 polls, Mean: 55.8%, Median: 53.9%
+  TLN: 271 polls, Mean: 80.3%, Median: 94.7%
+  TFNLN: 176 polls, Mean: 87.8%, Median: 91.7%
   Overall: Mean: 54.1%, Median: 52.4%
 
 Biden:
   Total polls: 7325
   Non-zero polls: 6919
-  ADJ_NAME: 22 polls, Mean: 47.2%, Median: 50.0%
-  FN: 28 polls, Mean: 40.0%, Median: 29.2%
-  LN: 5226 polls, Mean: 43.9%, Median: 42.1%
-  FNLN: 1596 polls, Mean: 38.2%, Median: 35.5%
-  TLN: 32 polls, Mean: 47.4%, Median: 47.1%
-  TFNLN: 15 polls, Mean: 34.9%, Median: 40.2%
+  ADJ_PET_NAME: 27 polls, Mean: 41.4%, Median: 50.0%
+  FN: 20 polls, Mean: 56.0%, Median: 56.1%
+  LN: 4892 polls, Mean: 44.5%, Median: 42.9%
+  FNLN: 1944 polls, Mean: 37.4%, Median: 33.4%
+  TLN: 27 polls, Mean: 51.3%, Median: 51.6%
+  TFNLN: 9 polls, Mean: 29.8%, Median: 28.6%
   Overall: Mean: 42.6%, Median: 40.7%
 
