@@ -1,1 +1,1 @@
-reports/*.html linguist-vendored
+reports/**/*.html linguist-vendored
