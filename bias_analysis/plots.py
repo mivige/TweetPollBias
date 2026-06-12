@@ -1083,6 +1083,13 @@ def generate_adjusted_dashboard(
 
                 predictit_df = pos_pit.merge(neg_pit, on="date", how="outer").sort_values("date")
 
+                # Convert to head-to-head probabilities
+                pos_mkt_col = f"market_{positive_candidate.lower()}"
+                neg_mkt_col = f"market_{negative_candidate.lower()}"
+                total_prob = predictit_df[pos_mkt_col] + predictit_df[neg_mkt_col]
+                predictit_df[pos_mkt_col] = predictit_df[pos_mkt_col] / total_prob
+                predictit_df[neg_mkt_col] = predictit_df[neg_mkt_col] / total_prob
+
                 # Filter to our analysis date range
                 predictit_df = predictit_df[
                     (predictit_df["date"] >= pd.Timestamp(min(rdf["date"])))
