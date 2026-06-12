@@ -47,6 +47,7 @@ def main(
         features.candidate_order(election=election)
         features.political_leaning(election=election, max_samples=max_rows)
         features.formal_vs_informal(election=election)
+        features.sentiment_and_toxicity(election=election)
         features.pearson_correlation(election=election, max_rows=max_rows)
     else:
         logger.warning("\n=== PHASE 1: FEATURE EXTRACTION (SKIPPED) ===")
