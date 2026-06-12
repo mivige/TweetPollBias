@@ -1,1 +1,2 @@
 reports/**/*.html linguist-vendored
+notebooks/*.ipynb linguist-vendored
