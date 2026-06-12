@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 from loguru import logger
 from tqdm import tqdm
 import typer
@@ -473,6 +474,25 @@ def main(
     ols_baseline_result = fit_ols_baseline(analysis_df)
     logger.info("--- Full OLS Model Summary ---")
     logger.info("\n" + str(ols_result.summary()))
+
+    logger.info("--- Variance Inflation Factor (VIF) ---")
+    exog = ols_result.model.exog
+    exog_names = ols_result.model.exog_names
+    
+    vif = pd.DataFrame()
+    vif["Variable"] = exog_names
+    vif["VIF"] = [variance_inflation_factor(exog, i) for i in range(exog.shape[1])]
+    
+    vif = vif.sort_values("VIF", ascending=False).reset_index(drop=True)
+    for idx, row in vif.iterrows():
+        vif_val = row["VIF"]
+        var_name = row["Variable"]
+        if var_name == "Intercept":
+            continue
+        warning = " (HIGH)" if vif_val > 5.0 else ""
+        logger.info(f"  {var_name:<35}: {vif_val:>6.2f}{warning}")
+    logger.info("---------------------------------------")
+
     logger.info("--- Baseline OLS Model Summary ---")
     logger.info("\n" + str(ols_baseline_result.summary()))
 
