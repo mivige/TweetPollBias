@@ -122,13 +122,14 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         st_df = pd.read_csv(st_path)
         st_df["poll_id"] = st_df["poll_id"].astype(str)
         df = df.merge(
-            st_df[["poll_id", "undirected_sentiment", "toxicity_score"]],
+            st_df[["poll_id", "undirected_sentiment", "sentiment_intensity", "toxicity_score"]],
             left_on="tweet_id", right_on="poll_id", how="left",
             suffixes=("", "_st"),
         )
     else:
         logger.warning(f"Missing {st_path.name} — sentiment and toxicity will be 0")
         df["undirected_sentiment"] = 0.0
+        df["sentiment_intensity"] = 0.0
         df["toxicity_score"] = 0.0
 
     cb_path = paths.processed_dir / "cognitive_biases.jsonl"
@@ -201,7 +202,7 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         "positive_share", "audience_mean_partisanship", "author_partisanship",
         "candidate_order", "formality_bias", "positive_ideology_score", "total_votes",
         "author_gender_male", "author_age_30_39", "author_age_40_over",
-        "undirected_sentiment", "toxicity_score"
+        "undirected_sentiment", "sentiment_intensity", "toxicity_score"
     ] + bias_columns
     for col in model_cols:
         if col in df.columns:
@@ -230,7 +231,7 @@ def fit_glm(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
-        " + undirected_sentiment + toxicity_score"
+        " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
         " + author_gender_male"
@@ -281,7 +282,7 @@ def fit_ols(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
-        " + undirected_sentiment + toxicity_score"
+        " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
         " + author_gender_male"
@@ -341,6 +342,7 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
     median_order = 0.0
     median_formality = 0.0
     median_sentiment = 0.0
+    median_intensity = 0.0
     median_toxicity = 0.0
     
     bias_columns = [
@@ -363,6 +365,7 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
                 "candidate_order": median_order,
                 "formality_bias": median_formality,
                 "undirected_sentiment": median_sentiment,
+                "sentiment_intensity": median_intensity,
                 "toxicity_score": median_toxicity,
                 **bias_medians,
                 "positive_ideology_score": profile["cons"] * mult,

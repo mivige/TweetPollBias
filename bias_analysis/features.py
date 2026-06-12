@@ -1815,6 +1815,7 @@ def sentiment_and_toxicity(
         results.append({
             'poll_id': poll_id,
             'undirected_sentiment': vs['compound'],
+            'sentiment_intensity': 1.0 - vs['neu'],
             'toxicity_score': None  # Placeholder, will fill via batching
         })
 
