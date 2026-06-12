@@ -1,7 +1,7 @@
 """
-Multilevel Regression and Post-stratification (MRP) for Twitter Poll Bias Adjustment.
+Sample-Calibrated Weighted GLM (SCWG) for Twitter Poll Bias Adjustment.
 
-This module implements a frequentist MRP pipeline that:
+This module implements a frequentist SCGW pipeline that:
 1. Merges raw poll data with project bias markers (candidate order, formality, political leaning).
 2. Fits a Binomial GLM weighted by poll size.
 3. Post-stratifies predictions over population strata.
@@ -435,7 +435,7 @@ def main(
 
     logger.info(f"  Raw Unweighted Average ({cand_pos} %) : {raw_avg * 100:.2f}%")
     logger.info(f"  Vote-Weighted Average  ({cand_pos} %) : {weighted_avg * 100:.2f}%")
-    logger.info(f"  MRP Adjusted Estimate  ({cand_pos} %) : {mrp_estimate * 100:.2f}%")
+    logger.info(f"  SCWG Adjusted Estimate  ({cand_pos} %) : {mrp_estimate * 100:.2f}%")
     logger.info(f"  Actual Result          ({cand_pos} %) : {actual_pos_share * 100:.1f}%")
 
     deviation = (mrp_estimate - actual_pos_share) * 100
@@ -516,7 +516,7 @@ def main(
     else:
         logger.info("-> Bias markers did NOT improve the OLS model.")
 
-    logger.success("MRP pipeline completed successfully.")
+    logger.success("SCWG pipeline completed successfully.")
 
 
 if __name__ == "__main__":
