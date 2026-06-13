@@ -22,7 +22,7 @@ REQUIRED_KEYS = [
     "candidate_colors",
     "election_date",
     "milestones",
-    "mrp",
+    "scwg",
     "raw_data_paths",
     "data_source_names",
     "processed_subdir",
@@ -77,14 +77,14 @@ def test_bias_direction_references_known_candidates(election):
 
 @pytest.mark.parametrize("election", KNOWN_ELECTIONS)
 def test_actual_results_are_valid_probabilities(election):
-    results = get_election_config(election)["mrp"]["actual_results"]
+    results = get_election_config(election)["scwg"]["actual_results"]
     for cand, share in results.items():
         assert 0.0 <= share <= 1.0, f"{election}: {cand} share {share!r} is out of [0, 1]"
 
 
 @pytest.mark.parametrize("election", KNOWN_ELECTIONS)
 def test_actual_results_sum_to_one(election):
-    results = get_election_config(election)["mrp"]["actual_results"]
+    results = get_election_config(election)["scwg"]["actual_results"]
     assert abs(sum(results.values()) - 1.0) < 0.01, (
         f"{election}: actual_results sum {sum(results.values()):.4f} ≠ 1"
     )
@@ -129,14 +129,14 @@ def test_nli_hypotheses_have_column_mapping(election):
 
 @pytest.mark.parametrize("election", KNOWN_ELECTIONS)
 def test_mrp_partisan_strata_sum_to_one(election):
-    strata = get_election_config(election)["mrp"]["partisan_strata"]
+    strata = get_election_config(election)["scwg"]["partisan_strata"]
     total = sum(strata.values())
     assert abs(total - 1.0) < 0.01, f"{election}: partisan_strata sum {total:.4f} ≠ 1"
 
 
 @pytest.mark.parametrize("election", KNOWN_ELECTIONS)
 def test_mrp_ideological_strata_sum_to_one(election):
-    strata = get_election_config(election)["mrp"]["ideological_strata"]
+    strata = get_election_config(election)["scwg"]["ideological_strata"]
     total = sum(strata.values())
     assert abs(total - 1.0) < 0.01, f"{election}: ideological_strata sum {total:.4f} ≠ 1"
 

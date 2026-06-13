@@ -60,8 +60,8 @@ class TestBuildPoststratFrame:
 
     def test_correct_number_of_strata(self, analysis_df):
         cfg = get_election_config("us20")
-        n_partisan = len(cfg["mrp"]["partisan_strata"])
-        n_ideological = len(cfg["mrp"]["ideological_strata"])
+        n_partisan = len(cfg["scwg"]["partisan_strata"])
+        n_ideological = len(cfg["scwg"]["ideological_strata"])
         ps = build_poststrat_frame(analysis_df, election="us20")
         assert len(ps) == n_partisan * n_ideological
 

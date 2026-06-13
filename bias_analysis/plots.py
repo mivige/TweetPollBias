@@ -984,8 +984,8 @@ def generate_adjusted_dashboard(
         logger.error("Base dataset is empty — aborting.")
         return
 
-    actual_pos_share = ecfg["mrp"]["actual_results"][positive_candidate]
-    actual_neg_share = ecfg["mrp"]["actual_results"][negative_candidate]
+    actual_pos_share = ecfg["scwg"]["actual_results"][positive_candidate]
+    actual_neg_share = ecfg["scwg"]["actual_results"][negative_candidate]
 
     df = load_and_merge_features(base_df, election=election)
     analysis_df = df.dropna(subset=["positive_share"]).copy()
