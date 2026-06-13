@@ -56,8 +56,6 @@ No data files are required, all tests use in-memory fixtures or temporary files.
 │
 ├── pyproject.toml     <- Package metadata and tool configuration (ruff).
 │
-├── references         <- Data dictionaries and explanatory materials.
-│
 ├── reports            <- Generated analysis outputs (HTML dashboards, JSON summaries).
 │   └── figures        <- Generated plots and figures.
 │
