@@ -20,9 +20,10 @@ If you have an NVIDIA GPU, this repository will automatically detect and utilize
 ## 2. Setting Up an Election & Modifying Configurations
 
 Our architecture defines multiple election campaigns through `bias_analysis/election_configs.py`. To configure a new race, add your parameters into the `ELECTION_CONFIGS` dictionary mapping:
+
 * **Candidates**: A list of targets (e.g. `["Trump", "Harris", "Biden"]`).
 * **Semantic Filters**: Match phrases to capture NLI text embeddings and Appellatives correctly.
-* **MRP Demographics**: Calibrate ideological bases to ensure post-stratification correctly maps to reality.
+* **SCWG Demographics**: Calibrate ideological bases to ensure post-stratification correctly maps to reality.
 * **Milestones**: Supply specific dashboard milestones like convention dates and debates.
 
 ### Directory Structure Requirements
@@ -32,4 +33,4 @@ Ensure your data is positioned correctly before running the endpoints. Path targ
 * **Raw Data:** Put your initial Twitter `.jsonl` or `.csv` files into `data/raw/<election>/`
 * **Processed Data:** Feature tables (`.csv`) get generated into `data/processed/<election>/`
 * **Reports:** Final analyses and statistics are output to `reports/<election>/`
-* **Figures:** Plot images and MRP HTML dashboards are generated in `reports/figures/<election>/`
+* **Figures:** Plot images and SCWG HTML dashboards are generated in `reports/figures/<election>/`
