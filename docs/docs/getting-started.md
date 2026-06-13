@@ -34,3 +34,24 @@ Ensure your data is positioned correctly before running the endpoints. Path targ
 * **Processed Data:** Feature tables (`.csv`) get generated into `data/processed/<election>/`
 * **Reports:** Final analyses and statistics are output to `reports/<election>/`
 * **Figures:** Plot images and SCWG HTML dashboards are generated in `reports/figures/<election>/`
+
+---
+
+## 3. Running the Tests
+
+The test suite requires no raw data as all tests use in-memory fixtures or temporary files. Run it from the project root:
+
+```bash
+make test
+# or directly:
+python -m pytest tests/ -v
+```
+
+The suite covers four modules:
+
+| File | What it tests |
+|---|---|
+| `test_election_configs.py` | Config completeness, probability constraints, key consistency |
+| `test_dataset.py` | All JSONL loaders, path helpers, PredictIt CSV parsing |
+| `test_features.py` | `smart_candidate_match` across exact, fuzzy, regex, and edge cases |
+| `test_train.py` | Post-stratification frame, GLM/OLS fitting, `poststratify` output |
