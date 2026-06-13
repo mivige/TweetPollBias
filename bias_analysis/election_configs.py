@@ -165,7 +165,7 @@ _US20_CONFIG = {
             "Trump": 0.477,
             "Biden": 0.523,
         },
-        "partisan_strata": {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.26},
+        "partisan_strata": {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.27},
         "ideological_strata": {"Conservative": 0.38, "Moderate": 0.38, "Liberal": 0.24},
         "demographic_profiles": {
             "Republican":  {"gender_male": 0.52, "age_under_29": 0.11, "age_30_39": 0.19, "age_40_over": 0.70},
