@@ -1,0 +1,8 @@
+pandas
+numpy
+statsmodels
+loguru
+tqdm
+typer
+python-dotenv
+pytest
