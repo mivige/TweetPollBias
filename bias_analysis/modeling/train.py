@@ -323,25 +323,36 @@ def fit_ols_baseline(df: pd.DataFrame):
     return result
 
 
-def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) -> pd.DataFrame:
+def build_poststrat_frame(
+    df: pd.DataFrame,
+    election: str = DEFAULT_ELECTION,
+    reference_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """
     Build a post-stratification frame crossing partisan × ideological strata.
+
+    reference_df: dataframe used to compute quantile anchors for the partisan
+    profiles. Defaults to df itself. Pass the full analysis_df when calling
+    from a rolling-window context so that quantile anchors stay stable across
+    windows that may have very few observations.
     """
     ecfg = get_election_config(election)
     mrp_cfg = ecfg["mrp"]
-    
+
     partisan_strata = mrp_cfg["partisan_strata"]
     ideological_strata = mrp_cfg["ideological_strata"]
     partisan_profiles_cfg = mrp_cfg["partisan_profiles"]
     ideology_offsets = mrp_cfg["ideology_offsets"]
     demographic_profiles = mrp_cfg["demographic_profiles"]
 
+    qref = reference_df if reference_df is not None else df
+
     partisan_profiles = {}
     for p_name, quantiles in partisan_profiles_cfg.items():
         partisan_profiles[p_name] = {
-            "aud": df["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]),
-            "auth": df["author_partisanship"].quantile(quantiles["auth_quantile"]),
-            "cons": df["positive_ideology_score"].quantile(quantiles["cons_quantile"]),
+            "aud": qref["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]),
+            "auth": qref["author_partisanship"].quantile(quantiles["auth_quantile"]),
+            "cons": qref["positive_ideology_score"].quantile(quantiles["cons_quantile"]),
         }
 
     # Zero-Bias Counterfactual: To isolate true population preference, we must project
@@ -351,7 +362,7 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
     median_sentiment = 0.0
     median_intensity = 0.0
     median_toxicity = 0.0
-    
+
     bias_columns = [
         "bias_confirmation", "bias_anchoring", "bias_availability",
         "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics"

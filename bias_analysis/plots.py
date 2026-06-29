@@ -1041,8 +1041,9 @@ def generate_adjusted_dashboard(
             else:
                 weighted_share = raw_share
 
-            # Window-specific post-stratification
-            ps_frame = build_poststrat_frame(window_df)
+            # Window-specific post-stratification; quantile anchors frozen to
+            # the full analysis_df so small windows don't produce noisy profiles.
+            ps_frame = build_poststrat_frame(window_df, reference_df=analysis_df)
             scwg_share = poststratify(glm_result, ps_frame)
             baseline_scwg_share = poststratify(baseline_glm_result, ps_frame)
 
