@@ -347,12 +347,31 @@ def build_poststrat_frame(
 
     qref = reference_df if reference_df is not None else df
 
+    # When a reference_df is provided (rolling-window mode), the quantile anchors
+    # come from the full reference distribution (stable), but are shifted by the
+    # window's mean deviation from the global mean.  This preserves the relative
+    # partisan structure (Republican > Independent > Democrat) while allowing the
+    # absolute level to drift with genuine weekly variation.  Using the mean (not
+    # a per-window quantile) keeps the shift low-variance.
+    def _mean_shift(col: str) -> float:
+        if reference_df is None:
+            return 0.0
+        w_mean = df[col].mean()
+        g_mean = qref[col].mean()
+        if pd.isna(w_mean) or pd.isna(g_mean):
+            return 0.0
+        return float(w_mean - g_mean)
+
+    aud_shift = _mean_shift("audience_mean_partisanship")
+    auth_shift = _mean_shift("author_partisanship")
+    cons_shift = _mean_shift("positive_ideology_score")
+
     partisan_profiles = {}
     for p_name, quantiles in partisan_profiles_cfg.items():
         partisan_profiles[p_name] = {
-            "aud": qref["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]),
-            "auth": qref["author_partisanship"].quantile(quantiles["auth_quantile"]),
-            "cons": qref["positive_ideology_score"].quantile(quantiles["cons_quantile"]),
+            "aud": qref["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]) + aud_shift,
+            "auth": qref["author_partisanship"].quantile(quantiles["auth_quantile"]) + auth_shift,
+            "cons": qref["positive_ideology_score"].quantile(quantiles["cons_quantile"]) + cons_shift,
         }
 
     # Zero-Bias Counterfactual: To isolate true population preference, we must project
