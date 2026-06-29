@@ -1,6 +1,6 @@
 # Visualizations
 
-The `plots.py` module utilizes Python's `seaborn` and `matplotlib` to convert generated processed data into stylized, high-quality graphs that convey the relationships between bias markers and poll outcomes. It also handles generating the final HTML Interactive MRP Bias Dashboard.
+The `plots.py` module utilizes Python's `seaborn` and `matplotlib` to convert generated processed data into stylized, high-quality graphs that convey the relationships between bias markers and poll outcomes. It also handles generating the final interactive HTML SCWG Bias Dashboard.
 
 ## Generating All Plots
 
@@ -8,7 +8,7 @@ To easily execute all visualization pipelines in sequence for a specific electio
 ```bash
 python -m bias_analysis.plots run-all --election us24
 ```
-*Key Output:* `reports/<election>/mrp_bias_dashboard.html` (Interactive MRP Dashboard)
+*Key Output:* `reports/<election>/scwg_bias_dashboard.html` (Interactive SCWG Dashboard)
 
 ---
 

@@ -4,8 +4,8 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "bias_analysis"
-version = "0.0.1"
-description = "Twitter social-poll analysis (2020 cycle): extract candidate-order, appellatives, sentiment, emoji and political-leaning markers and study their relationship with poll biases."
+version = "1.0.0"
+description = "Multi-election Twitter social-poll bias analysis (US 2016, 2020, 2024): candidate ordering, appellatives, political leaning, sentiment, cognitive biases, and SCWG post-stratification."
 authors = [
   { name = "Michele Vincenzo Gentile" },
 ]

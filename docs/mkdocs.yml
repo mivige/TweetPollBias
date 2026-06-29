@@ -1,11 +1,11 @@
 site_name: TweetPollBias
 site_author: Michele Vincenzo Gentile
-site_description: "Twitter social-poll analysis (2020 cycle): extract candidate-order, appellatives, and political-leaning markers."
+site_description: "Multi-election Twitter social-poll bias analysis (US 2016, 2020, 2024): candidate ordering, appellatives, political leaning, and SCWG post-stratification."
 
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Feature Extraction: features.md
-  - MRP Modeling: mrp-modeling.md
+  - SCWG Modeling: scwg-modeling.md
   - Data Schema: data-schema.md
   - Visualizations & Plots: plots.md
