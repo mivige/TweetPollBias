@@ -1,0 +1,16 @@
+=== SCWG Dashboard Statistics ===
+
+Election: us24
+Rolling window: 7 days
+Daily data points: 107
+
+--- SCWG Accuracy vs Actual Result (Trump %) ---
+  SCWG MAE:                    21.82 pp
+  Raw (vote-weighted) MAE:     28.09 pp
+  Baseline SCWG MAE:           23.47 pp
+  SCWG improvement over raw:   +6.27 pp
+  SCWG improvement over baseline: +1.65 pp
+
+--- PredictIt Market Comparison ---
+  Market MAE vs Actual:        4.06 pp
+  Mean Divergence (SCWG vs Market): 23.67 pp
