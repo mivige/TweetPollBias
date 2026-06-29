@@ -14,29 +14,7 @@
 
 A multi-election social-poll analysis framework for Twitter. This project extracts bias markers (candidate ordering, appellatives, political leaning, sentiment, cognitive biases) and uses a **Sample-Calibrated Weighted GLM (SCWG)** to analyze how these factors correlate with poll outcomes across multiple election cycles (US 2016, 2020, 2024).
 
-## Quick Start
-
-To run the complete pipeline (Feature Extraction → SCWG Modeling → Visualizations) for a specific election:
-
-```bash
-python run_pipeline.py --election <election_code>
-```
-> [!TIP]
-> **Available election codes:** `us16`, `us20`, `us24`
-
-For installation, data setup, and environment variables, see the **[full documentation](docs/)**.
-
-## Testing
-
-The test suite covers election configs, data loaders, candidate matching, and the SCWG modeling functions. Run it with:
-
-```bash
-make test
-# or directly:
-python -m pytest tests/ -v
-```
-
-No data files are required, all tests use in-memory fixtures or temporary files.
+For setup, usage, and full documentation see the **[project wiki](https://github.com/mivige/TweetPollBias/wiki)**.
 
 ## Project Organization
 
