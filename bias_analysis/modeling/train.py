@@ -104,19 +104,40 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         df["formality_bias"] = 0.0
 
     pl_path = paths.processed_dir / "political_leaning_features.csv"
-    pos_score_col = ecfg["hypothesis_column_mapping"].get("positive_ideology", "positive_ideology_score")
+    col_map = ecfg["hypothesis_column_mapping"]
+    pos_score_col = col_map.get("positive_ideology", "positive_ideology_score")
+    neg_score_col = col_map.get("negative_ideology", "negative_ideology_score")
+    cand_a_support_col = col_map.get("candidate_A_support", "candidate_A_support_score")
+    cand_b_support_col = col_map.get("candidate_B_support", "candidate_B_support_score")
+    cand_a_oppose_col = col_map.get("candidate_A_oppose", "candidate_A_oppose_score")
+    cand_b_oppose_col = col_map.get("candidate_B_oppose", "candidate_B_oppose_score")
     if pl_path.exists():
         pl_df = pd.read_csv(pl_path)
         pl_df["poll_id"] = pl_df["poll_id"].astype(str)
+        extra_leaning_cols = [
+            c for c in [neg_score_col, cand_a_support_col, cand_b_support_col,
+                        cand_a_oppose_col, cand_b_oppose_col]
+            if c in pl_df.columns
+        ]
         df = df.merge(
-            pl_df[["poll_id", pos_score_col]],
+            pl_df[["poll_id", pos_score_col] + extra_leaning_cols],
             left_on="tweet_id", right_on="poll_id", how="left",
             suffixes=("", "_pl"),
         )
-        df = df.rename(columns={pos_score_col: "positive_ideology_score"})
+        df = df.rename(columns={
+            pos_score_col: "positive_ideology_score",
+            neg_score_col: "negative_ideology_score",
+            cand_a_support_col: "candidate_A_support_score",
+            cand_b_support_col: "candidate_B_support_score",
+            cand_a_oppose_col: "candidate_A_oppose_score",
+            cand_b_oppose_col: "candidate_B_oppose_score",
+        })
     else:
-        logger.warning(f"Missing {pl_path.name} — positive_ideology_score will be 0")
-        df["positive_ideology_score"] = 0.0
+        logger.warning(f"Missing {pl_path.name} — ideology/support scores will be 0")
+        for col in ["positive_ideology_score", "negative_ideology_score",
+                    "candidate_A_support_score", "candidate_B_support_score",
+                    "candidate_A_oppose_score", "candidate_B_oppose_score"]:
+            df[col] = 0.0
 
     st_path = paths.processed_dir / "sentiment_toxicity_features.csv"
     if st_path.exists():
@@ -194,7 +215,10 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         else:
             df[col] = 0.0
 
-    for col in ["candidate_order", "formality_bias", "positive_ideology_score"]:
+    for col in ["candidate_order", "formality_bias", "positive_ideology_score",
+                "negative_ideology_score", "candidate_A_support_score",
+                "candidate_B_support_score", "candidate_A_oppose_score",
+                "candidate_B_oppose_score"]:
         df[col] = df[col].fillna(0.0)
 
     for col in ["author_gender_male", "author_age_30_39", "author_age_40_over"]:
@@ -207,7 +231,9 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
     # Rows with missing positive_share will be dropped later.
     model_cols = [
         "positive_share", "audience_mean_partisanship", "author_partisanship",
-        "candidate_order", "formality_bias", "positive_ideology_score", "total_votes",
+        "candidate_order", "formality_bias", "positive_ideology_score",
+        "negative_ideology_score", "candidate_A_support_score", "candidate_B_support_score",
+        "candidate_A_oppose_score", "candidate_B_oppose_score", "total_votes",
         "author_gender_male", "author_age_30_39", "author_age_40_over",
         "undirected_sentiment", "sentiment_intensity", "toxicity_score"
     ] + bias_columns
@@ -238,6 +264,9 @@ def fit_glm(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + negative_ideology_score"
+        " + candidate_A_support_score + candidate_B_support_score"
+        " + candidate_A_oppose_score + candidate_B_oppose_score"
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
@@ -289,6 +318,9 @@ def fit_ols(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + negative_ideology_score"
+        " + candidate_A_support_score + candidate_B_support_score"
+        " + candidate_A_oppose_score + candidate_B_oppose_score"
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
@@ -384,7 +416,9 @@ def build_poststrat_frame(
 
     bias_columns = [
         "bias_confirmation", "bias_anchoring", "bias_availability",
-        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics"
+        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics",
+        "negative_ideology_score", "candidate_A_support_score", "candidate_B_support_score",
+        "candidate_A_oppose_score", "candidate_B_oppose_score",
     ]
     bias_medians = {b: 0.0 for b in bias_columns}
 
