@@ -491,6 +491,7 @@ def main(
     election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
 ):
     ecfg = get_election_config(election)
+    paths = get_election_paths(election)
     cand_pos = ecfg["bias_direction"]["positive"]
     actual_pos_share = ecfg["scwg"]["actual_results"][cand_pos]
     market = ecfg["scwg"]["prediction_market"]
@@ -615,6 +616,49 @@ def main(
         logger.info("-> Bias markers did NOT improve the OLS model.")
 
     logger.success("SCWG pipeline completed successfully.")
+
+    # --- Save model statistics txt -------------------------------------------
+    lines = [
+        f"=== SCWG Model Statistics ===",
+        f"",
+        f"Election: {election}",
+        f"Analysis-ready polls: {len(analysis_df)}",
+        f"",
+        f"--- SCWG Vote-Share Estimates ---",
+        f"  Raw Unweighted Average  ({cand_pos} %): {raw_avg * 100:.2f}%",
+        f"  Vote-Weighted Average   ({cand_pos} %): {weighted_avg * 100:.2f}%",
+        f"  SCWG Adjusted Estimate  ({cand_pos} %): {scwg_estimate * 100:.2f}%",
+        f"  Actual Result           ({cand_pos} %): {actual_pos_share * 100:.1f}%",
+        f"  Exit-Poll Deviation              : {deviation:+.2f} pp",
+        f"",
+        f"--- GLM Model Comparison (AIC: lower is better) ---",
+        f"  Full GLM AIC:                {glm_result.aic:.2f}",
+        f"  Baseline GLM AIC:            {baseline_glm_result.aic:.2f}",
+        f"  AIC improvement:             {baseline_glm_result.aic - glm_result.aic:.2f}",
+        f"  Full GLM Log-Likelihood:     {glm_result.llf:.2f}",
+        f"  Baseline GLM Log-Likelihood: {baseline_glm_result.llf:.2f}",
+        f"",
+        f"--- OLS Model Comparison ---",
+        f"  Full OLS Adj. R-squared:     {ols_result.rsquared_adj:.4f}",
+        f"  Baseline OLS Adj. R-squared: {ols_baseline_result.rsquared_adj:.4f}",
+        f"  Adj. R-squared improvement:  {ols_result.rsquared_adj - ols_baseline_result.rsquared_adj:+.4f}",
+        f"  Full OLS AIC:                {ols_result.aic:.2f}",
+        f"  Baseline OLS AIC:            {ols_baseline_result.aic:.2f}",
+        f"  OLS AIC improvement:         {ols_baseline_result.aic - ols_result.aic:.2f}",
+        f"",
+        f"--- VIF (Variance Inflation Factor) ---",
+    ]
+    for _, vif_row in vif.iterrows():
+        vif_val = vif_row["VIF"]
+        var_name = vif_row["Variable"]
+        if var_name == "Intercept":
+            continue
+        flag = " (HIGH)" if vif_val > 5.0 else ""
+        lines.append(f"  {var_name:<35}: {vif_val:>6.2f}{flag}")
+
+    stats_path = paths.reports_dir / "scwg_model_statistics.txt"
+    stats_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.success(f"Model statistics saved to {stats_path}")
 
 
 if __name__ == "__main__":

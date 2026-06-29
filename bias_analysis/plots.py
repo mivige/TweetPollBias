@@ -1304,10 +1304,17 @@ def generate_adjusted_dashboard(
     mae_actual = (rdf[pos_scwg_col] - actual_pos_share).abs().mean() * 100
     logger.info(f"SCWG Estimate MAE vs Actual Result (across all days): {mae_actual:.2f} pp")
 
+    pos_raw_col = f"raw_{positive_candidate.lower()}"
+    mae_raw = (rdf[pos_raw_col] - actual_pos_share).abs().mean() * 100
+    pos_baseline_col = f"baseline_{positive_candidate.lower()}"
+    mae_baseline = (rdf[pos_baseline_col] - actual_pos_share).abs().mean() * 100
+
     # Compute additional metrics if PredictIt Market is available
+    mae_mkt_actual = None
+    divergence = None
     if predictit_df is not None and not predictit_df.empty:
         mkt_col = f"market_{positive_candidate.lower()}"
-        
+
         # 1. Market MAE vs Actual
         mae_mkt_actual = (predictit_df[mkt_col] - actual_pos_share).abs().mean() * 100
         logger.info(f"PredictIt Market MAE vs Actual Result (across all market days): {mae_mkt_actual:.2f} pp")
@@ -1317,6 +1324,36 @@ def generate_adjusted_dashboard(
         if not merged.empty:
             divergence = (merged[pos_scwg_col] - merged[mkt_col]).abs().mean() * 100
             logger.info(f"Mean Divergence (MAE) between SCWG and PredictIt: {divergence:.2f} pp")
+
+    # --- Save dashboard statistics txt ----------------------------------------
+    dash_lines = [
+        f"=== SCWG Dashboard Statistics ===",
+        f"",
+        f"Election: {election}",
+        f"Rolling window: 7 days",
+        f"Daily data points: {len(rdf)}",
+        f"",
+        f"--- SCWG Accuracy vs Actual Result ({positive_candidate} %) ---",
+        f"  SCWG MAE:                    {mae_actual:.2f} pp",
+        f"  Raw (vote-weighted) MAE:     {mae_raw:.2f} pp",
+        f"  Baseline SCWG MAE:           {mae_baseline:.2f} pp",
+        f"  SCWG improvement over raw:   {mae_raw - mae_actual:+.2f} pp",
+        f"  SCWG improvement over baseline: {mae_baseline - mae_actual:+.2f} pp",
+        f"",
+    ]
+    if mae_mkt_actual is not None:
+        dash_lines += [
+            f"--- PredictIt Market Comparison ---",
+            f"  Market MAE vs Actual:        {mae_mkt_actual:.2f} pp",
+        ]
+        if divergence is not None:
+            dash_lines.append(f"  Mean Divergence (SCWG vs Market): {divergence:.2f} pp")
+    else:
+        dash_lines.append("--- PredictIt Market Comparison: N/A (no data) ---")
+
+    dash_path = paths.reports_dir / "scwg_dashboard_statistics.txt"
+    dash_path.write_text("\n".join(dash_lines) + "\n", encoding="utf-8")
+    logger.success(f"Dashboard statistics saved to {dash_path}")
 
     return rdf
 
