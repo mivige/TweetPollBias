@@ -104,19 +104,40 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         df["formality_bias"] = 0.0
 
     pl_path = paths.processed_dir / "political_leaning_features.csv"
-    pos_score_col = ecfg["hypothesis_column_mapping"].get("positive_ideology", "positive_ideology_score")
+    col_map = ecfg["hypothesis_column_mapping"]
+    pos_score_col = col_map.get("positive_ideology", "positive_ideology_score")
+    neg_score_col = col_map.get("negative_ideology", "negative_ideology_score")
+    cand_a_support_col = col_map.get("candidate_A_support", "candidate_A_support_score")
+    cand_b_support_col = col_map.get("candidate_B_support", "candidate_B_support_score")
+    cand_a_oppose_col = col_map.get("candidate_A_oppose", "candidate_A_oppose_score")
+    cand_b_oppose_col = col_map.get("candidate_B_oppose", "candidate_B_oppose_score")
     if pl_path.exists():
         pl_df = pd.read_csv(pl_path)
         pl_df["poll_id"] = pl_df["poll_id"].astype(str)
+        extra_leaning_cols = [
+            c for c in [neg_score_col, cand_a_support_col, cand_b_support_col,
+                        cand_a_oppose_col, cand_b_oppose_col]
+            if c in pl_df.columns
+        ]
         df = df.merge(
-            pl_df[["poll_id", pos_score_col]],
+            pl_df[["poll_id", pos_score_col] + extra_leaning_cols],
             left_on="tweet_id", right_on="poll_id", how="left",
             suffixes=("", "_pl"),
         )
-        df = df.rename(columns={pos_score_col: "positive_ideology_score"})
+        df = df.rename(columns={
+            pos_score_col: "positive_ideology_score",
+            neg_score_col: "negative_ideology_score",
+            cand_a_support_col: "candidate_A_support_score",
+            cand_b_support_col: "candidate_B_support_score",
+            cand_a_oppose_col: "candidate_A_oppose_score",
+            cand_b_oppose_col: "candidate_B_oppose_score",
+        })
     else:
-        logger.warning(f"Missing {pl_path.name} — positive_ideology_score will be 0")
-        df["positive_ideology_score"] = 0.0
+        logger.warning(f"Missing {pl_path.name} — ideology/support scores will be 0")
+        for col in ["positive_ideology_score", "negative_ideology_score",
+                    "candidate_A_support_score", "candidate_B_support_score",
+                    "candidate_A_oppose_score", "candidate_B_oppose_score"]:
+            df[col] = 0.0
 
     st_path = paths.processed_dir / "sentiment_toxicity_features.csv"
     if st_path.exists():
@@ -177,8 +198,14 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         for b in bias_columns:
             df[b] = 0.0
 
-    # --- Target: positive_share ---------------------------------------------
-    df["positive_share"] = df[f"{cand_pos}_percentage"] / 100.0
+    # --- Target: positive_share (Head-to-Head) ------------------------------
+    pos_votes = df[f"{cand_pos}_votes"].fillna(0)
+    neg_votes = df[f"{cand_neg}_votes"].fillna(0)
+    h2h_total = pos_votes + neg_votes
+    
+    # Calculate share and override total_votes to reflect H2H sample size
+    df["positive_share"] = np.where(h2h_total > 0, pos_votes / h2h_total, np.nan)
+    df["total_votes"] = h2h_total
 
     for col in ["audience_mean_partisanship", "author_partisanship"]:
         if col in df.columns:
@@ -188,8 +215,19 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         else:
             df[col] = 0.0
 
-    for col in ["candidate_order", "formality_bias", "positive_ideology_score"]:
+    for col in ["candidate_order", "formality_bias", "positive_ideology_score",
+                "negative_ideology_score", "candidate_A_support_score",
+                "candidate_B_support_score", "candidate_A_oppose_score",
+                "candidate_B_oppose_score"]:
         df[col] = df[col].fillna(0.0)
+
+    if "duration_minutes" in df.columns:
+        df["log_duration"] = np.log1p(pd.to_numeric(df["duration_minutes"], errors="coerce").fillna(
+            pd.to_numeric(df["duration_minutes"], errors="coerce").median()
+        ))
+    else:
+        df["log_duration"] = 0.0
+
 
     for col in ["author_gender_male", "author_age_30_39", "author_age_40_over"]:
         if col in df.columns:
@@ -201,8 +239,11 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
     # Rows with missing positive_share will be dropped later.
     model_cols = [
         "positive_share", "audience_mean_partisanship", "author_partisanship",
-        "candidate_order", "formality_bias", "positive_ideology_score", "total_votes",
+        "candidate_order", "formality_bias", "positive_ideology_score",
+        "negative_ideology_score", "candidate_A_support_score", "candidate_B_support_score",
+        "candidate_A_oppose_score", "candidate_B_oppose_score", "total_votes",
         "author_gender_male", "author_age_30_39", "author_age_40_over",
+        "log_duration",
         "undirected_sentiment", "sentiment_intensity", "toxicity_score"
     ] + bias_columns
     for col in model_cols:
@@ -232,9 +273,13 @@ def fit_glm(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + negative_ideology_score"
+        " + candidate_A_support_score + candidate_B_support_score"
+        " + candidate_A_oppose_score + candidate_B_oppose_score"
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
+        " + log_duration"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -249,7 +294,10 @@ def fit_glm(df: pd.DataFrame):
         family=sm.families.Binomial(),
         var_weights=raw_weights,
     )
-    result = model.fit()
+    # scale='X2' estimates the overdispersion parameter φ from the Pearson chi-squared
+    # statistic (equivalent to R's quasibinomial). Twitter poll votes are not truly
+    # independent (social influence, bot voting) so φ > 1 is expected.
+    result = model.fit(scale="X2")
     return result
 
 
@@ -271,7 +319,7 @@ def fit_glm_baseline(df: pd.DataFrame):
         family=sm.families.Binomial(),
         var_weights=raw_weights,
     )
-    result = model.fit()
+    result = model.fit(scale="X2")
     return result
 
 
@@ -283,9 +331,13 @@ def fit_ols(df: pd.DataFrame):
     formula = (
         "positive_share ~ audience_mean_partisanship + author_partisanship"
         " + candidate_order + formality_bias + positive_ideology_score"
+        " + negative_ideology_score"
+        " + candidate_A_support_score + candidate_B_support_score"
+        " + candidate_A_oppose_score + candidate_B_oppose_score"
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
+        " + log_duration"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -317,9 +369,18 @@ def fit_ols_baseline(df: pd.DataFrame):
     return result
 
 
-def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) -> pd.DataFrame:
+def build_poststrat_frame(
+    df: pd.DataFrame,
+    election: str = DEFAULT_ELECTION,
+    reference_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """
     Build a post-stratification frame crossing partisan × ideological strata.
+
+    reference_df: dataframe used to compute quantile anchors for the partisan
+    profiles. Defaults to df itself. Pass the full analysis_df when calling
+    from a rolling-window context so that quantile anchors stay stable across
+    windows that may have very few observations.
     """
     ecfg = get_election_config(election)
     scwg_cfg = ecfg["scwg"]
@@ -330,12 +391,36 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
     ideology_offsets = scwg_cfg["ideology_offsets"]
     demographic_profiles = scwg_cfg["demographic_profiles"]
 
+    qref = reference_df if reference_df is not None else df
+
+    # When a reference_df is provided (rolling-window mode), the quantile anchors
+    # come from the full reference distribution (stable), but are shifted by the
+    # window's mean deviation from the global mean.  This preserves the relative
+    # partisan structure (Republican > Independent > Democrat) while allowing the
+    # absolute level to drift with genuine weekly variation.  Using the mean (not
+    # a per-window quantile) keeps the shift low-variance.
+    def _mean_shift(col: str) -> float:
+        if reference_df is None:
+            return 0.0
+        w_mean = df[col].mean()
+        g_mean = qref[col].mean()
+        if pd.isna(w_mean) or pd.isna(g_mean):
+            return 0.0
+        return float(w_mean - g_mean)
+
+    aud_shift = _mean_shift("audience_mean_partisanship")
+    auth_shift = _mean_shift("author_partisanship")
+    cons_shift = _mean_shift("positive_ideology_score")
+    neg_shift = _mean_shift("negative_ideology_score")
+
     partisan_profiles = {}
     for p_name, quantiles in partisan_profiles_cfg.items():
         partisan_profiles[p_name] = {
-            "aud": df["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]),
-            "auth": df["author_partisanship"].quantile(quantiles["auth_quantile"]),
-            "cons": df["positive_ideology_score"].quantile(quantiles["cons_quantile"]),
+            "aud": qref["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]) + aud_shift,
+            "auth": qref["author_partisanship"].quantile(quantiles["auth_quantile"]) + auth_shift,
+            "cons": qref["positive_ideology_score"].quantile(quantiles["cons_quantile"]) + cons_shift,
+            # Mirror: conservative audiences have LOW liberal NLI (inverted quantile)
+            "neg": qref["negative_ideology_score"].quantile(1.0 - quantiles["cons_quantile"]) + neg_shift,
         }
 
     # Zero-Bias Counterfactual: To isolate true population preference, we must project
@@ -345,10 +430,18 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
     median_sentiment = 0.0
     median_intensity = 0.0
     median_toxicity = 0.0
-    
+    # Duration is structural (not bias markers); use global medians
+    # so the post-strat reflects a typical poll rather than an out-of-distribution value.
+    if "log_duration" in qref.columns:
+        median_log_duration = float(qref["log_duration"].median())
+    else:
+        median_log_duration = float(np.log1p(pd.to_numeric(qref.get("duration_minutes", pd.Series()), errors="coerce").median())) if "duration_minutes" in qref.columns else 0.0
+
     bias_columns = [
         "bias_confirmation", "bias_anchoring", "bias_availability",
-        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics"
+        "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics",
+        "candidate_A_support_score", "candidate_B_support_score",
+        "candidate_A_oppose_score", "candidate_B_oppose_score",
     ]
     bias_medians = {b: 0.0 for b in bias_columns}
 
@@ -358,6 +451,9 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
             profile = partisan_profiles[p_name]
             demo = demographic_profiles[p_name]
             mult = ideology_offsets[i_name]["cons_mult"]
+            # Mirror mult for liberal ideology: Conservative strata get lower liberal NLI,
+            # Liberal strata get higher liberal NLI (2.0 - mult inverts around 1.0)
+            neg_mult = 2.0 - mult
             rows.append({
                 "partisan_stratum": p_name,
                 "ideology_stratum": i_name,
@@ -369,7 +465,9 @@ def build_poststrat_frame(df: pd.DataFrame, election: str = DEFAULT_ELECTION) ->
                 "sentiment_intensity": median_intensity,
                 "toxicity_score": median_toxicity,
                 **bias_medians,
-                "positive_ideology_score": profile["cons"] * mult,
+                "positive_ideology_score": float(np.clip(profile["cons"] * mult, 0.0, 1.0)),
+                "negative_ideology_score": float(np.clip(profile["neg"] * neg_mult, 0.0, 1.0)),
+                "log_duration": median_log_duration,
                 "author_gender_male": demo["gender_male"],
                 "author_age_30_39": demo["age_30_39"],
                 "author_age_40_over": demo["age_40_over"],
@@ -393,6 +491,7 @@ def main(
     election: str = typer.Option(DEFAULT_ELECTION, help="Election code (e.g. 'us20')"),
 ):
     ecfg = get_election_config(election)
+    paths = get_election_paths(election)
     cand_pos = ecfg["bias_direction"]["positive"]
     actual_pos_share = ecfg["scwg"]["actual_results"][cand_pos]
     market = ecfg["scwg"]["prediction_market"]
@@ -517,6 +616,49 @@ def main(
         logger.info("-> Bias markers did NOT improve the OLS model.")
 
     logger.success("SCWG pipeline completed successfully.")
+
+    # --- Save model statistics txt -------------------------------------------
+    lines = [
+        f"=== SCWG Model Statistics ===",
+        f"",
+        f"Election: {election}",
+        f"Analysis-ready polls: {len(analysis_df)}",
+        f"",
+        f"--- SCWG Vote-Share Estimates ---",
+        f"  Raw Unweighted Average  ({cand_pos} %): {raw_avg * 100:.2f}%",
+        f"  Vote-Weighted Average   ({cand_pos} %): {weighted_avg * 100:.2f}%",
+        f"  SCWG Adjusted Estimate  ({cand_pos} %): {scwg_estimate * 100:.2f}%",
+        f"  Actual Result           ({cand_pos} %): {actual_pos_share * 100:.1f}%",
+        f"  Exit-Poll Deviation              : {deviation:+.2f} pp",
+        f"",
+        f"--- GLM Model Comparison (AIC: lower is better) ---",
+        f"  Full GLM AIC:                {glm_result.aic:.2f}",
+        f"  Baseline GLM AIC:            {baseline_glm_result.aic:.2f}",
+        f"  AIC improvement:             {baseline_glm_result.aic - glm_result.aic:.2f}",
+        f"  Full GLM Log-Likelihood:     {glm_result.llf:.2f}",
+        f"  Baseline GLM Log-Likelihood: {baseline_glm_result.llf:.2f}",
+        f"",
+        f"--- OLS Model Comparison ---",
+        f"  Full OLS Adj. R-squared:     {ols_result.rsquared_adj:.4f}",
+        f"  Baseline OLS Adj. R-squared: {ols_baseline_result.rsquared_adj:.4f}",
+        f"  Adj. R-squared improvement:  {ols_result.rsquared_adj - ols_baseline_result.rsquared_adj:+.4f}",
+        f"  Full OLS AIC:                {ols_result.aic:.2f}",
+        f"  Baseline OLS AIC:            {ols_baseline_result.aic:.2f}",
+        f"  OLS AIC improvement:         {ols_baseline_result.aic - ols_result.aic:.2f}",
+        f"",
+        f"--- VIF (Variance Inflation Factor) ---",
+    ]
+    for _, vif_row in vif.iterrows():
+        vif_val = vif_row["VIF"]
+        var_name = vif_row["Variable"]
+        if var_name == "Intercept":
+            continue
+        flag = " (HIGH)" if vif_val > 5.0 else ""
+        lines.append(f"  {var_name:<35}: {vif_val:>6.2f}{flag}")
+
+    stats_path = paths.reports_dir / "scwg_model_statistics.txt"
+    stats_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.success(f"Model statistics saved to {stats_path}")
 
 
 if __name__ == "__main__":

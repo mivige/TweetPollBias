@@ -1,0 +1,51 @@
+=== SCWG Model Statistics ===
+
+Election: us16
+Analysis-ready polls: 759
+
+--- SCWG Vote-Share Estimates ---
+  Raw Unweighted Average  (Trump %): 56.62%
+  Vote-Weighted Average   (Trump %): 65.47%
+  SCWG Adjusted Estimate  (Trump %): 59.18%
+  Actual Result           (Trump %): 48.9%
+  Exit-Poll Deviation              : +10.28 pp
+
+--- GLM Model Comparison (AIC: lower is better) ---
+  Full GLM AIC:                158946.16
+  Baseline GLM AIC:            162248.97
+  AIC improvement:             3302.80
+  Full GLM Log-Likelihood:     -79450.08
+  Baseline GLM Log-Likelihood: -81118.48
+
+--- OLS Model Comparison ---
+  Full OLS Adj. R-squared:     0.1195
+  Baseline OLS Adj. R-squared: 0.0903
+  Adj. R-squared improvement:  +0.0292
+  Full OLS AIC:                10.77
+  Baseline OLS AIC:            18.89
+  OLS AIC improvement:         8.12
+
+--- VIF (Variance Inflation Factor) ---
+  sentiment_intensity                :   1.83
+  candidate_B_oppose_score           :   1.81
+  candidate_A_oppose_score           :   1.75
+  undirected_sentiment               :   1.68
+  positive_ideology_score            :   1.52
+  negative_ideology_score            :   1.49
+  bias_demand_characteristics        :   1.44
+  candidate_A_support_score          :   1.44
+  toxicity_score                     :   1.41
+  author_age_40_over                 :   1.37
+  candidate_B_support_score          :   1.33
+  author_partisanship                :   1.31
+  audience_mean_partisanship         :   1.29
+  author_age_30_39                   :   1.25
+  candidate_order                    :   1.15
+  bias_confirmation                  :   1.12
+  author_gender_male                 :   1.12
+  bias_availability                  :   1.09
+  bias_anchoring                     :   1.07
+  bias_social_desirability           :   1.07
+  formality_bias                     :   1.07
+  log_duration                       :   1.05
+  bias_acquiescence                  :    nan

@@ -36,6 +36,11 @@ def analysis_df() -> pd.DataFrame:
             "candidate_order": RNG.uniform(-0.5, 0.5, N),
             "formality_bias": RNG.uniform(-1.0, 1.0, N),
             "positive_ideology_score": RNG.uniform(0.0, 1.0, N),
+            "negative_ideology_score": RNG.uniform(0.0, 1.0, N),
+            "candidate_A_support_score": RNG.uniform(0.0, 1.0, N),
+            "candidate_B_support_score": RNG.uniform(0.0, 1.0, N),
+            "candidate_A_oppose_score": RNG.uniform(0.0, 1.0, N),
+            "candidate_B_oppose_score": RNG.uniform(0.0, 1.0, N),
             "undirected_sentiment": RNG.uniform(-1.0, 1.0, N),
             "sentiment_intensity": RNG.uniform(0.0, 1.0, N),
             "toxicity_score": RNG.uniform(0.0, 0.3, N),
@@ -43,6 +48,7 @@ def analysis_df() -> pd.DataFrame:
             "author_gender_male": RNG.uniform(0.0, 1.0, N),
             "author_age_30_39": RNG.uniform(0.0, 1.0, N),
             "author_age_40_over": RNG.uniform(0.0, 1.0, N),
+            "log_duration": RNG.uniform(0.0, 7.0, N),
             "total_votes": RNG.integers(10, 1000, N),
         }
     )
