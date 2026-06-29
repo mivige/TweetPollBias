@@ -1036,6 +1036,10 @@ def generate_adjusted_dashboard(
 
         if len(window_df) >= 3:
             raw_share = window_df["positive_share"].mean()
+            if window_df["total_votes"].sum() > 0:
+                weighted_share = (window_df["positive_share"] * window_df["total_votes"]).sum() / window_df["total_votes"].sum()
+            else:
+                weighted_share = raw_share
 
             # Window-specific post-stratification
             ps_frame = build_poststrat_frame(window_df)
@@ -1044,8 +1048,8 @@ def generate_adjusted_dashboard(
 
             results.append({
                 "date": current.date(),
-                f"raw_{positive_candidate.lower()}": raw_share,
-                f"raw_{negative_candidate.lower()}": 1.0 - raw_share,
+                f"raw_{positive_candidate.lower()}": weighted_share,
+                f"raw_{negative_candidate.lower()}": 1.0 - weighted_share,
                 f"scwg_{positive_candidate.lower()}": scwg_share,
                 f"scwg_{negative_candidate.lower()}": 1.0 - scwg_share,
                 f"baseline_{positive_candidate.lower()}": baseline_scwg_share,
@@ -1139,21 +1143,21 @@ def generate_adjusted_dashboard(
     # Raw positive candidate (dashed)
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[pos_raw_col] * 100,
-        mode="lines", name=f"Raw Twitter Mean for {positive_candidate}",
+        mode="lines", name=f"Vote-Weighted Baseline for {positive_candidate}",
         line=dict(color=pos_hex, width=1.5, dash="dot"),
         opacity=0.8,
         legendgroup="raw",
-        hovertemplate=f"<b>{positive_candidate} Raw</b>: %{{y:.1f}}%<extra></extra>",
+        hovertemplate=f"<b>{positive_candidate} Weighted Base</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
     # Raw negative candidate (dashed)
     fig.add_trace(go.Scatter(
         x=rdf["date"], y=rdf[neg_raw_col] * 100,
-        mode="lines", name=f"Raw Twitter Mean for {negative_candidate}",
+        mode="lines", name=f"Vote-Weighted Baseline for {negative_candidate}",
         line=dict(color=neg_hex, width=1.5, dash="dot"),
         opacity=0.8,
         legendgroup="raw",
-        hovertemplate=f"<b>{negative_candidate} Raw</b>: %{{y:.1f}}%<extra></extra>",
+        hovertemplate=f"<b>{negative_candidate} Weighted Base</b>: %{{y:.1f}}%<extra></extra>",
     ))
 
     pos_base_col = f"baseline_{positive_candidate.lower()}"

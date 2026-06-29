@@ -177,8 +177,14 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         for b in bias_columns:
             df[b] = 0.0
 
-    # --- Target: positive_share ---------------------------------------------
-    df["positive_share"] = df[f"{cand_pos}_percentage"] / 100.0
+    # --- Target: positive_share (Head-to-Head) ------------------------------
+    pos_votes = df[f"{cand_pos}_votes"].fillna(0)
+    neg_votes = df[f"{cand_neg}_votes"].fillna(0)
+    h2h_total = pos_votes + neg_votes
+    
+    # Calculate share and override total_votes to reflect H2H sample size
+    df["positive_share"] = np.where(h2h_total > 0, pos_votes / h2h_total, np.nan)
+    df["total_votes"] = h2h_total
 
     for col in ["audience_mean_partisanship", "author_partisanship"]:
         if col in df.columns:
