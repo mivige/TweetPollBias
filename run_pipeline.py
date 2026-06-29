@@ -3,8 +3,8 @@ End-to-End Pipeline Runner for TweetPollBias
 
 This script executes the entire data pipeline for a specified election:
 1. Feature extraction (candidate order, formality, leaning, correlations)
-2. MRP Modeling (GLM fitting, post-stratification)
-3. Visualizations (Plots and MRP dashboard)
+2. SCWG Modeling (GLM fitting, post-stratification)
+3. Visualizations (Plots and SCWG dashboard)
 """
 
 import sys
@@ -24,7 +24,7 @@ app = typer.Typer(help="Run the complete TweetPollBias pipeline.")
 def main(
     election: str = typer.Option("us20", help="Election code (e.g. 'us20', 'us16')"),
     skip_features: bool = typer.Option(False, "--skip-features", help="Skip feature extraction step"),
-    skip_modeling: bool = typer.Option(False, "--skip-modeling", help="Skip MRP modeling step"),
+    skip_modeling: bool = typer.Option(False, "--skip-modeling", help="Skip SCWG modeling step"),
     skip_plots: bool = typer.Option(False, "--skip-plots", help="Skip visualization step"),
     max_rows: int = typer.Option(None, help="Limit number of rows processed per file (useful for testing)"),
 ):
@@ -52,12 +52,12 @@ def main(
     else:
         logger.warning("\n=== PHASE 1: FEATURE EXTRACTION (SKIPPED) ===")
 
-    # 2. MRP Modeling
+    # 2. SCWG Modeling
     if not skip_modeling:
-        logger.info("\n=== PHASE 2: MRP MODELING ===")
+        logger.info("\n=== PHASE 2: SCWG MODELING ===")
         train.main(election=election)
     else:
-        logger.warning("\n=== PHASE 2: MRP MODELING (SKIPPED) ===")
+        logger.warning("\n=== PHASE 2: SCWG MODELING (SKIPPED) ===")
         
     # 3. Visualizations
     if not skip_plots:

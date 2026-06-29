@@ -4,7 +4,7 @@ The `features.py` module exposes Typer CLI commands to execute various stages of
 
 ## Running the Full Pipeline
 
-The easiest way to extract all features, build the MRP models, and generate dashboards is using the unified runner:
+The easiest way to extract all features, build the SCWG models, and generate dashboards is using the unified runner:
 ```bash
 python run_pipeline.py --election us24
 ```
@@ -50,13 +50,34 @@ python -m bias_analysis.features political-leaning --election us24 --max-samples
 
 ---
 
-### 4. Pearson Correlation Analysis
+### 4. Sentiment & Toxicity Analysis
+
+Computes VADER sentiment scores and Detoxify toxicity scores for each poll tweet.
+```bash
+python -m bias_analysis.features sentiment-and-toxicity --election us24
+```
+*Outputs to:* `data/processed/<election>/sentiment_toxicity_features.csv`
+
+---
+
+### 5. Cognitive Bias Extraction
+
+Uses the Gemini LLM to detect six cognitive biases in each poll (confirmation, anchoring, availability heuristic, social desirability, acquiescence, demand characteristics). Requires a `GEMINI_API_KEY` in your `.env` file.
+```bash
+python -m bias_analysis.llm_bias_extraction extract-biases --election us24
+```
+*Outputs to:* `data/processed/<election>/cognitive_biases.jsonl`
+
+---
+
+### 6. Pearson Correlation Analysis
 
 Aggregates the extracted features above to compute author bias, audience bias, and poll outcomes, followed by a rigorous multi-marker Pearson Correlation using bootstrapping and FDR-correction.
 ```bash
 python -m bias_analysis.features pearson-correlation --election us24
 ```
 *Outputs to:* 
+
 * `reports/<election>/pearson_correlation_results.csv`
 * `reports/<election>/correlation_analysis_summary.json`
 * `reports/figures/<election>/assumption_check_distributions.png`

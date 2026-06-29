@@ -144,10 +144,10 @@ _US20_CONFIG = {
         "Biden": "tab:blue",
     },
 
-    # ── Election date (used by MRP dashboard to cap time axis) ───────────
+    # ── Election date (used by SCWG dashboard to cap time axis) ──────────
     "election_date": "2020-11-03",
 
-    # ── Campaign milestones (vertical markers on the MRP dashboard) ──────
+    # ── Campaign milestones (vertical markers on the SCWG dashboard) ─────
     "milestones": [
         ("2020-06-18", "Tulsa effect: Pro-Trump Twitter mobilization artificially spikes poll numbers"),
         ("2020-07-04", "Biden's 'Soul of the Nation' July 4th message well-received amidst Trump struggles"),
@@ -159,13 +159,13 @@ _US20_CONFIG = {
         ("2020-10-22", "Second & last debate (Nashville, Tennessee)"),
     ],
 
-    # ── MRP Model Configuration ───────────────────────────────────────────
-    "mrp": {
+    # ── SCWG Model Configuration ──────────────────────────────────────────
+    "scwg": {
         "actual_results": {
             "Trump": 0.477,
             "Biden": 0.523,
         },
-        "partisan_strata": {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.26},
+        "partisan_strata": {"Republican": 0.36, "Democrat": 0.37, "Independent": 0.27},
         "ideological_strata": {"Conservative": 0.38, "Moderate": 0.38, "Liberal": 0.24},
         "demographic_profiles": {
             "Republican":  {"gender_male": 0.52, "age_under_29": 0.11, "age_30_39": 0.19, "age_40_over": 0.70},
@@ -349,7 +349,7 @@ _US16_CONFIG = {
         ("2016-10-28", "Comey announces reopening of Clinton email investigation"),
     ],
 
-    "mrp": {
+    "scwg": {
         "actual_results": {
             "Trump": 0.489,
             "Clinton": 0.511,
@@ -531,7 +531,7 @@ _US24_CONFIG = {
         ("2024-10-01", "Vice Presidential debate (CBS)"),
     ],
 
-    "mrp": {
+    "scwg": {
         "actual_results": {
             "Trump": 0.506,
             "Harris": 0.494,

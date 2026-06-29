@@ -337,13 +337,13 @@ def build_poststrat_frame(
     windows that may have very few observations.
     """
     ecfg = get_election_config(election)
-    mrp_cfg = ecfg["mrp"]
+    scwg_cfg = ecfg["scwg"]
 
-    partisan_strata = mrp_cfg["partisan_strata"]
-    ideological_strata = mrp_cfg["ideological_strata"]
-    partisan_profiles_cfg = mrp_cfg["partisan_profiles"]
-    ideology_offsets = mrp_cfg["ideology_offsets"]
-    demographic_profiles = mrp_cfg["demographic_profiles"]
+    partisan_strata = scwg_cfg["partisan_strata"]
+    ideological_strata = scwg_cfg["ideological_strata"]
+    partisan_profiles_cfg = scwg_cfg["partisan_profiles"]
+    ideology_offsets = scwg_cfg["ideology_offsets"]
+    demographic_profiles = scwg_cfg["demographic_profiles"]
 
     qref = reference_df if reference_df is not None else df
 
@@ -411,8 +411,8 @@ def main(
 ):
     ecfg = get_election_config(election)
     cand_pos = ecfg["bias_direction"]["positive"]
-    actual_pos_share = ecfg["mrp"]["actual_results"][cand_pos]
-    market = ecfg["mrp"]["prediction_market"]
+    actual_pos_share = ecfg["scwg"]["actual_results"][cand_pos]
+    market = ecfg["scwg"]["prediction_market"]
 
     base_df = get_base_dataset(election=election)
     if base_df.empty:
@@ -431,7 +431,7 @@ def main(
     logger.info("\n" + str(glm_result.summary()))
 
     ps_frame = build_poststrat_frame(analysis_df, election=election)
-    mrp_estimate = poststratify(glm_result, ps_frame)
+    scwg_estimate = poststratify(glm_result, ps_frame)
 
     ps_frame[f"predicted_{cand_pos.lower()}_share"] = glm_result.predict(ps_frame)
     logger.info("\nPost-stratification predictions per stratum:")
@@ -452,10 +452,10 @@ def main(
 
     logger.info(f"  Raw Unweighted Average ({cand_pos} %) : {raw_avg * 100:.2f}%")
     logger.info(f"  Vote-Weighted Average  ({cand_pos} %) : {weighted_avg * 100:.2f}%")
-    logger.info(f"  SCWG Adjusted Estimate  ({cand_pos} %) : {mrp_estimate * 100:.2f}%")
+    logger.info(f"  SCWG Adjusted Estimate  ({cand_pos} %) : {scwg_estimate * 100:.2f}%")
     logger.info(f"  Actual Result          ({cand_pos} %) : {actual_pos_share * 100:.1f}%")
 
-    deviation = (mrp_estimate - actual_pos_share) * 100
+    deviation = (scwg_estimate - actual_pos_share) * 100
     logger.info(f"  Exit-Poll Deviation              : {deviation:+.2f} pp")
 
     logger.info("")
