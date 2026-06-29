@@ -221,6 +221,14 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
                 "candidate_B_oppose_score"]:
         df[col] = df[col].fillna(0.0)
 
+    if "duration_minutes" in df.columns:
+        df["log_duration"] = np.log1p(pd.to_numeric(df["duration_minutes"], errors="coerce").fillna(
+            pd.to_numeric(df["duration_minutes"], errors="coerce").median()
+        ))
+    else:
+        df["log_duration"] = 0.0
+
+
     for col in ["author_gender_male", "author_age_30_39", "author_age_40_over"]:
         if col in df.columns:
             col_mean = df[col].mean()
@@ -235,6 +243,7 @@ def load_and_merge_features(base_df: pd.DataFrame, election: str = DEFAULT_ELECT
         "negative_ideology_score", "candidate_A_support_score", "candidate_B_support_score",
         "candidate_A_oppose_score", "candidate_B_oppose_score", "total_votes",
         "author_gender_male", "author_age_30_39", "author_age_40_over",
+        "log_duration",
         "undirected_sentiment", "sentiment_intensity", "toxicity_score"
     ] + bias_columns
     for col in model_cols:
@@ -270,6 +279,7 @@ def fit_glm(df: pd.DataFrame):
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
+        " + log_duration"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -284,7 +294,10 @@ def fit_glm(df: pd.DataFrame):
         family=sm.families.Binomial(),
         var_weights=raw_weights,
     )
-    result = model.fit()
+    # scale='X2' estimates the overdispersion parameter φ from the Pearson chi-squared
+    # statistic (equivalent to R's quasibinomial). Twitter poll votes are not truly
+    # independent (social influence, bot voting) so φ > 1 is expected.
+    result = model.fit(scale="X2")
     return result
 
 
@@ -306,7 +319,7 @@ def fit_glm_baseline(df: pd.DataFrame):
         family=sm.families.Binomial(),
         var_weights=raw_weights,
     )
-    result = model.fit()
+    result = model.fit(scale="X2")
     return result
 
 
@@ -324,6 +337,7 @@ def fit_ols(df: pd.DataFrame):
         " + undirected_sentiment + sentiment_intensity + toxicity_score"
         " + bias_confirmation + bias_anchoring + bias_availability"
         " + bias_social_desirability + bias_acquiescence + bias_demand_characteristics"
+        " + log_duration"
         " + author_gender_male"
         " + author_age_30_39 + author_age_40_over"
     )
@@ -397,6 +411,7 @@ def build_poststrat_frame(
     aud_shift = _mean_shift("audience_mean_partisanship")
     auth_shift = _mean_shift("author_partisanship")
     cons_shift = _mean_shift("positive_ideology_score")
+    neg_shift = _mean_shift("negative_ideology_score")
 
     partisan_profiles = {}
     for p_name, quantiles in partisan_profiles_cfg.items():
@@ -404,6 +419,8 @@ def build_poststrat_frame(
             "aud": qref["audience_mean_partisanship"].quantile(quantiles["aud_quantile"]) + aud_shift,
             "auth": qref["author_partisanship"].quantile(quantiles["auth_quantile"]) + auth_shift,
             "cons": qref["positive_ideology_score"].quantile(quantiles["cons_quantile"]) + cons_shift,
+            # Mirror: conservative audiences have LOW liberal NLI (inverted quantile)
+            "neg": qref["negative_ideology_score"].quantile(1.0 - quantiles["cons_quantile"]) + neg_shift,
         }
 
     # Zero-Bias Counterfactual: To isolate true population preference, we must project
@@ -413,11 +430,17 @@ def build_poststrat_frame(
     median_sentiment = 0.0
     median_intensity = 0.0
     median_toxicity = 0.0
+    # Duration is structural (not bias markers); use global medians
+    # so the post-strat reflects a typical poll rather than an out-of-distribution value.
+    if "log_duration" in qref.columns:
+        median_log_duration = float(qref["log_duration"].median())
+    else:
+        median_log_duration = float(np.log1p(pd.to_numeric(qref.get("duration_minutes", pd.Series()), errors="coerce").median())) if "duration_minutes" in qref.columns else 0.0
 
     bias_columns = [
         "bias_confirmation", "bias_anchoring", "bias_availability",
         "bias_social_desirability", "bias_acquiescence", "bias_demand_characteristics",
-        "negative_ideology_score", "candidate_A_support_score", "candidate_B_support_score",
+        "candidate_A_support_score", "candidate_B_support_score",
         "candidate_A_oppose_score", "candidate_B_oppose_score",
     ]
     bias_medians = {b: 0.0 for b in bias_columns}
@@ -428,6 +451,9 @@ def build_poststrat_frame(
             profile = partisan_profiles[p_name]
             demo = demographic_profiles[p_name]
             mult = ideology_offsets[i_name]["cons_mult"]
+            # Mirror mult for liberal ideology: Conservative strata get lower liberal NLI,
+            # Liberal strata get higher liberal NLI (2.0 - mult inverts around 1.0)
+            neg_mult = 2.0 - mult
             rows.append({
                 "partisan_stratum": p_name,
                 "ideology_stratum": i_name,
@@ -439,7 +465,9 @@ def build_poststrat_frame(
                 "sentiment_intensity": median_intensity,
                 "toxicity_score": median_toxicity,
                 **bias_medians,
-                "positive_ideology_score": profile["cons"] * mult,
+                "positive_ideology_score": float(np.clip(profile["cons"] * mult, 0.0, 1.0)),
+                "negative_ideology_score": float(np.clip(profile["neg"] * neg_mult, 0.0, 1.0)),
+                "log_duration": median_log_duration,
                 "author_gender_male": demo["gender_male"],
                 "author_age_30_39": demo["age_30_39"],
                 "author_age_40_over": demo["age_40_over"],
