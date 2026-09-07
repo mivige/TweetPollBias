@@ -3,8 +3,6 @@
 **Bachelor's Thesis - Sapienza University of Rome, Computer Science, 2026**
 
 > Author: Michele Vincenzo Gentile
->
-> Supervisor: [SUPERVISOR PLACEHOLDER]
 
 <a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
